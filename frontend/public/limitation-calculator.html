@@ -1,0 +1,1775 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nego. Limitation Calculator</title>
+    <style>
+:root {
+  color-scheme: light;
+  --ink: #172033;
+  --muted: #5f6875;
+  --line: #d8ccb8;
+  --paper: #ffffff;
+  --surface: #f7f1e6;
+  --accent: #1e3a8a;
+  --accent-strong: #172f72;
+  --gold: #f97316;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --focus: #1e3a8a;
+  font-family: "Times New Roman";
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.shell {
+  width: min(1080px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 22px;
+}
+
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+.topline {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 34px;
+}
+
+.credit {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.home-panel {
+  min-height: calc(100vh - 90px);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 34px;
+  text-align: center;
+  background: var(--paper);
+  border: 1px solid #e6dccb;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(30, 58, 138, 0.08);
+  padding: 30px;
+}
+
+h1 {
+  margin: 0;
+  max-width: 760px;
+  font-size: clamp(2rem, 6vw, 4rem);
+  line-height: 1.08;
+  color: #08206b;
+}
+
+h2,
+h3 {
+  margin: 0;
+}
+
+.home-actions,
+.action-grid,
+.form-actions,
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.primary,
+.secondary,
+.icon-text,
+.plain {
+  min-height: 44px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  padding: 10px 18px;
+  font-weight: 700;
+}
+
+.primary {
+  background: var(--accent);
+  color: white;
+}
+
+.primary:hover {
+  background: var(--accent-strong);
+}
+
+.secondary {
+  background: #fff;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.secondary:hover,
+.icon-text:hover {
+  border-color: var(--accent);
+}
+
+.plain {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.large {
+  width: min(360px, 100%);
+  min-height: 76px;
+  font-size: 1.12rem;
+}
+
+.icon-text {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.page-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.page-head h2 {
+  text-align: center;
+  margin-right: 86px;
+  font-size: clamp(1.35rem, 4vw, 2.2rem);
+}
+
+.form-panel,
+.result-panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px;
+  box-shadow: 0 12px 28px rgba(30, 58, 138, 0.08);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: #2b3443;
+  font-weight: 700;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #d4c8b0;
+  border-radius: 4px;
+  padding: 9px 11px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.date-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.date-button {
+  min-height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 8px 12px;
+  background: #fff;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.date-button:hover {
+  border-color: var(--accent);
+}
+
+input:focus,
+select:focus,
+button:focus {
+  outline: 3px solid color-mix(in srgb, var(--focus), transparent 70%);
+  outline-offset: 2px;
+}
+
+.form-actions {
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.success {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.errors,
+.warning-list {
+  margin-top: 16px;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.warning-list p {
+  margin: 0 0 10px;
+}
+
+dialog {
+  width: min(500px, calc(100% - 28px));
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+}
+
+dialog::backdrop {
+  background: rgba(12, 18, 28, 0.45);
+}
+
+.dialog-box {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.stacked {
+  display: grid;
+}
+
+.date-picker {
+  width: min(620px, calc(100vw - 28px));
+}
+
+.picker-toolbar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.picker-toolbar button {
+  padding-left: 8px;
+  padding-right: 8px;
+  min-width: 0;
+}
+
+.picker-jump {
+  display: grid;
+  grid-template-columns: 1fr 140px;
+  gap: 12px;
+}
+
+.picker-week,
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.picker-week span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.picker-day {
+  min-height: 42px;
+  border: 1px solid #dce2e8;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.picker-day.blank {
+  visibility: hidden;
+}
+
+.picker-day:hover {
+  border-color: var(--accent);
+}
+
+.picker-day.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.picker-day.today {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+.result-list {
+  display: grid;
+  gap: 14px;
+}
+
+.result-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.result-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.result-value {
+  font-weight: 800;
+  color: #0b3a4a;
+  text-align: right;
+}
+
+.adjustment {
+  grid-column: 1 / -1;
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.disclaimer {
+  margin: 18px 0 0;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.calendar-toolbar strong {
+  min-width: 86px;
+  text-align: center;
+  font-size: 1.25rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.mark {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  vertical-align: -2px;
+  margin-right: 5px;
+}
+
+.mark.default {
+  background: #f5d58b;
+}
+
+.mark.custom {
+  background: #ef9a9a;
+}
+
+.mark.working {
+  background: #a7d8ba;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.month {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.month h3 {
+  font-size: 1rem;
+  margin-bottom: 10px;
+}
+
+.week,
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.week span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.day {
+  min-height: 34px;
+  border: 1px solid #dce2e8;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  padding: 3px;
+  font-size: 0.86rem;
+}
+
+.day.blank {
+  visibility: hidden;
+}
+
+.day.default-holiday {
+  background: #f5d58b;
+  border-color: #d6a93e;
+}
+
+.day.custom-holiday {
+  background: #ef9a9a;
+  border-color: #da5a5a;
+}
+
+.day.working-day {
+  background: #a7d8ba;
+  border-color: #4f9c6a;
+}
+
+.day.today {
+  box-shadow: inset 0 0 0 2px #1d4ed8;
+}
+
+.print-doc {
+  font-family: "Times New Roman";
+  color: #000;
+  max-width: 180mm;
+  margin: 0 auto;
+  line-height: 1.28;
+  font-size: 14pt;
+}
+
+.print-doc h1 {
+  color: #000;
+  font-size: 14pt;
+  text-align: left;
+  margin: 0 0 16px;
+}
+
+.print-doc .title {
+  text-align: center;
+  font-weight: bold;
+  margin: 10px 0 14px;
+}
+
+.print-doc p {
+  margin: 0 0 10px;
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+.print-doc .order-page {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  min-height: 260mm;
+  padding-top: 2mm;
+}
+
+.print-doc .order-page.page-break {
+  page-break-before: always;
+  break-before: page;
+}
+
+.print-doc .sign {
+  margin-top: 24px;
+  text-align: right;
+}
+
+.print-doc .sign p,
+.print-doc .date-line,
+.print-doc .place-line {
+  text-align: left;
+}
+
+.print-doc .sign p {
+  text-align: right;
+}
+
+@media (max-width: 860px) {
+  .field-grid,
+  .calendar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-head {
+    grid-template-columns: 1fr;
+  }
+
+  .page-head h2 {
+    margin-right: 0;
+  }
+
+  .form-actions {
+    justify-content: stretch;
+  }
+
+  .form-actions button,
+  .home-actions button,
+  .dialog-actions button,
+  .date-control {
+    width: 100%;
+  }
+
+  .date-control,
+  .picker-toolbar,
+  .picker-jump {
+    grid-template-columns: 1fr;
+  }
+
+  .result-row {
+    grid-template-columns: 1fr;
+  }
+
+  .result-value {
+    text-align: left;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .print-controls {
+    display: none;
+  }
+}
+
+</style>
+  <style id="nyaydwar-theme">
+/* NyayDwar look & feel for the Limitation Calculator (appearance only). */
+:root {
+  --ink: #19231f; --muted: #6d7772; --line: #ddd8cc; --paper: #fffdf8; --surface: #f5f1e8;
+  --accent: #173f35; --accent-strong: #246452; --gold: #c9a35e; --danger: #a34037; --success: #246452; --focus: #246452;
+}
+body { background: var(--surface); color: var(--ink); }
+.shell { font-family: 'Segoe UI', 'Lohit Gujarati', 'Tiro Devanagari Hindi', Arial, sans-serif; width: min(1120px, 100%); padding: 26px 28px 40px; }
+.shell h1, .shell h2, .shell h3, .page-head h2, .month h3 { font-family: Georgia, 'Lohit Gujarati', 'Times New Roman', serif; }
+.topline { min-height: 0; margin-bottom: 10px; }
+.credit { font-style: italic; font-size: 13px; }
+.home-panel {
+  min-height: calc(100vh - 110px); background: var(--paper); border: 1px solid var(--line); border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(24, 35, 31, .10); position: relative; overflow: hidden; gap: 30px;
+}
+.home-panel::before {
+  content: ""; display: block; width: 96px; height: 96px; margin: 0 auto -8px;
+  background: url("/nyayadwar-logo.svg") center / contain no-repeat; filter: drop-shadow(0 8px 18px rgba(0,0,0,.18));
+}
+.home-panel::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px; background: linear-gradient(90deg, #173f35, #c9a35e, #173f35);
+}
+.home-panel h1 { color: var(--accent); font-weight: 700; letter-spacing: .2px; font-size: clamp(2rem, 5vw, 3.4rem); }
+.primary, .secondary, .icon-text, .plain, .date-button { border-radius: 8px; transition: background .15s, box-shadow .15s, transform .15s; }
+.primary { background: var(--accent); color: #fff; }
+.primary:hover { background: var(--accent-strong); box-shadow: 0 6px 16px rgba(24,35,31,.16); transform: translateY(-1px); }
+.secondary { background: #fff; color: var(--accent); border: 1.5px solid var(--accent); }
+.secondary:hover { background: var(--accent); color: #fff; }
+.icon-text { background: #fff; color: var(--accent); border: 1.5px solid var(--accent); }
+.icon-text:hover { background: var(--accent); color: #fff; }
+.plain { color: var(--muted); border-color: var(--line); background: #fff; }
+.large { border-radius: 12px; }
+.page-head {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px;
+  box-shadow: 0 4px 16px rgba(24,35,31,.05); border-left: 5px solid var(--gold);
+}
+.page-head h2 { color: var(--accent); font-size: clamp(1.3rem, 3.2vw, 1.9rem); }
+.form-panel, .result-panel, .month {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 4px 16px rgba(24,35,31,.05);
+}
+.form-panel, .result-panel { padding: 24px 26px; }
+.result-panel:not(:empty) { margin-top: 18px; border-top: 4px solid var(--accent-strong); }
+label { color: var(--ink); font-size: 14px; }
+input, select { border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+input:focus, select:focus, button:focus { outline: none; box-shadow: 0 0 0 3px rgba(36,100,82,.18); border-color: var(--accent-strong); }
+.date-button { color: var(--accent); border: 1.5px solid var(--accent); background: #fff; }
+.date-button:hover { background: var(--accent); color: #fff; }
+.result-row { border-bottom-color: #ebe7de; }
+.result-value { color: var(--accent); }
+dialog { border-radius: 18px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-family: 'Segoe UI', 'Lohit Gujarati', Arial, sans-serif; }
+dialog::backdrop { background: rgba(16, 30, 26, .55); }
+.dialog-box h2, .dialog-box h3 { font-family: Georgia, 'Times New Roman', serif; color: var(--accent); }
+.picker-day { border-color: #e6e1d6; border-radius: 8px; }
+.picker-day:hover { border-color: var(--accent-strong); background: #f3f8f5; }
+.picker-day.selected { background: var(--accent); border-color: var(--accent); color: #fff; }
+.picker-day.today { box-shadow: inset 0 0 0 2px var(--gold); }
+.calendar-toolbar strong { font-family: Georgia, serif; color: var(--accent); font-size: 1.5rem; }
+.month h3 { color: var(--accent); border-bottom: 1px solid #ebe7de; padding-bottom: 6px; }
+.day { border-color: #e6e1d6; }
+.day.today { box-shadow: inset 0 0 0 2px var(--accent-strong); }
+.legend { font-size: 14px; }
+#datePickerDialog { width: min(680px, calc(100% - 28px)); max-width: none; }
+@media (max-width: 860px) { .shell { padding: 16px; } .page-head h2 { text-align: left; } }
+
+/* ---- NyayDwar header bar, cleaner home screen (appearance only) ---- */
+.topline { display: none !important; }
+.nd-topbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 32px; background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: 0 2px 10px rgba(24,35,31,.04); font-family: 'Segoe UI', 'Lohit Gujarati', Arial, sans-serif; }
+.nd-topbar .nd-row { display: flex; align-items: center; gap: 12px; }
+.nd-topbar .nd-eyebrow { margin: 0 0 2px; text-transform: uppercase; letter-spacing: .16em; font-size: 10.5px; font-weight: 700; color: #a8843f; }
+.nd-topbar h2 { margin: 0; font: 700 22px Georgia, 'Times New Roman', serif; color: var(--accent); }
+.nd-btn { min-height: 38px; padding: 8px 14px; border-radius: 8px; border: 1.5px solid var(--accent); background: #fff; color: var(--accent); font-weight: 700; cursor: pointer; font-family: inherit; font-size: 15px; }
+.nd-btn:hover { background: var(--accent); color: #fff; }
+.page-head button[data-route="home"] { display: none !important; }
+.home-actions button[onclick*="history.back"], .home-actions .staff-only { display: none !important; }
+.page-head { grid-template-columns: 1fr auto; }
+.page-head h2 { text-align: left !important; margin-right: 0 !important; order: -1; }
+.home-panel { min-height: 0; padding: 44px 36px 40px; gap: 18px; margin-top: 8px; }
+.home-panel::before { width: 84px; height: 84px; margin-bottom: 0; }
+.home-panel .nd-kicker { margin: 0; text-transform: uppercase; letter-spacing: .18em; font-size: 12px; font-weight: 700; color: #a8843f; }
+.home-panel .nd-lead { margin: -6px auto 8px; max-width: 620px; color: var(--muted); font-size: 16px; line-height: 1.6; }
+.home-actions { gap: 18px; }
+.home-actions button { min-width: 250px; min-height: 0; padding: 18px 22px; border-radius: 14px; text-align: left; display: flex; flex-direction: column; gap: 4px; font-size: 17px; }
+.home-actions button::after { font-weight: 400; font-size: 13px; opacity: .85; }
+.home-actions button[data-route="calculator"]::after { content: "Enter the cheque and notice dates to get the limitation result"; }
+.home-actions button[data-route="calendar"]::after { content: "Mark court holidays and working days"; }
+.home-actions button { max-width: 300px; }
+.nd-steps { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.nd-steps span { background: #f7f3ea; border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; font-size: 13px; color: var(--muted); }
+.nd-steps b { color: var(--accent); margin-right: 6px; }
+@media (max-width: 860px) { .nd-topbar { padding: 10px 14px; } .home-actions button { min-width: 0; max-width: none; width: 100%; } }
+@media print { .nd-topbar { display: none !important; } }
+</style>
+</head>
+  <body>
+    <main class="shell">
+      <section id="home" class="screen active">
+        <div class="topline">
+          <p class="credit">Created by N. A. Kulkarni</p>
+        </div>
+        <div class="home-panel">
+          <p class="nd-kicker">Section 138, Negotiable Instruments Act</p>
+          <h1>Nego. Limitation Calculator</h1>
+          <p class="nd-lead">Works out the limitation for a cheque-dishonour complaint from the cheque, return memo, demand notice and filing dates, taking the court calendar into account.</p>
+          <div class="home-actions">
+            <button class="primary" data-route="calculator">Calculate Limitation</button>
+            <button class="secondary admin-only" data-route="calendar">Calendar Modification</button>
+            <button class="secondary" type="button" onclick="history.back()">Back</button>
+            <button class="secondary staff-only" type="button" onclick="location.href='/staff'">Return to Staff Desk</button>
+          </div>
+          <div class="nd-steps"><span><b>1</b>Enter the dates</span><span><b>2</b>Submit</span><span><b>3</b>See the result</span></div>
+        </div>
+      </section>
+
+      <section id="details-menu" class="screen">
+        <header class="page-head">
+          <button class="icon-text" data-route="home">Back</button>
+          <h2>Enter Details</h2>
+        </header>
+        <div class="action-grid">
+          <button class="primary large" data-route="jo-details">Enter JO Details</button>
+          <button class="secondary large" data-route="calendar">Calendar Modification</button>
+        </div>
+      </section>
+
+      <section id="jo-details" class="screen">
+        <header class="page-head">
+          <button class="icon-text" data-route="home">Back</button>
+          <h2>Judicial Officer Details</h2>
+        </header>
+        <form id="joForm" class="form-panel">
+          <label>
+            Name of the Judicial Officer
+            <input id="joName" type="text" placeholder="N. A. Kulkarni" autocomplete="name">
+          </label>
+          <label>
+            Designation
+            <input id="joDesignation" type="text" placeholder="42nd A. C. J. M.">
+          </label>
+          <label>
+            Place
+            <input id="joPlace" type="text" placeholder="Ahmedabad City">
+          </label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Submit</button>
+          </div>
+          <p id="joSaved" class="success" hidden>Details saved.</p>
+        </form>
+      </section>
+
+      <section id="calendar" class="screen">
+        <header class="page-head">
+          <button class="icon-text" data-route="home">Back</button>
+          <h2>Calendar Modification</h2>
+        </header>
+        <div class="calendar-toolbar">
+          <button id="prevYear" class="icon-text" type="button">Previous Year</button>
+          <strong id="calendarYear"></strong>
+          <button id="nextYear" class="icon-text" type="button">Next Year</button>
+        </div>
+        <div class="legend">
+          <span><b class="mark default"></b> Default non-working</span>
+          <span><b class="mark custom"></b> User holiday</span>
+          <span><b class="mark working"></b> Marked working</span>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </section>
+
+      <section id="calculator" class="screen">
+        <header class="page-head">
+          <button class="icon-text" data-route="home">Back</button>
+          <h2>Nego. Limitation Calculator</h2>
+        </header>
+        <form id="caseForm" class="form-panel">
+          <div class="field-grid">
+            <label>Date of Cheque
+              <span class="date-control">
+                <input id="chequeDate" required type="text" inputmode="numeric" placeholder="DD/MM/YYYY">
+                <button class="date-button" type="button" data-date-picker="chequeDate" aria-label="Select Date of Cheque">Calendar</button>
+              </span>
+            </label>
+            <label>Cheque Presentation Date
+              <span class="date-control">
+                <input id="presentationDate" required type="text" inputmode="numeric" placeholder="DD/MM/YYYY">
+                <button class="date-button" type="button" data-date-picker="presentationDate" aria-label="Select Cheque Presentation Date">Calendar</button>
+              </span>
+            </label>
+            <label>Return Memo Date
+              <span class="date-control">
+                <input id="returnMemoDate" required type="text" inputmode="numeric" placeholder="DD/MM/YYYY">
+                <button class="date-button" type="button" data-date-picker="returnMemoDate" aria-label="Select Return Memo Date">Calendar</button>
+              </span>
+            </label>
+            <label>Demand Notice Date (As per Postal Slip)
+              <span class="date-control">
+                <input id="noticeDate" required type="text" inputmode="numeric" placeholder="DD/MM/YYYY">
+                <button class="date-button" type="button" data-date-picker="noticeDate" aria-label="Select Demand Notice Date">Calendar</button>
+              </span>
+            </label>
+            <label>Demand Notice Receipt Date
+              <span class="date-control">
+                <input id="receiptDate" required type="text" inputmode="numeric" placeholder="DD/MM/YYYY">
+                <button class="date-button" type="button" data-date-picker="receiptDate" aria-label="Select Demand Notice Receipt Date">Calendar</button>
+              </span>
+            </label>
+            <label>Complaint Filing Date
+              <span class="date-control">
+                <input id="filingDate" required type="text" inputmode="numeric" placeholder="DD/MM/YYYY">
+                <button class="date-button" type="button" data-date-picker="filingDate" aria-label="Select Complaint Filing Date">Calendar</button>
+              </span>
+            </label>
+            <label>Accused Local / Outstation?
+              <select id="accusedLocation" required>
+                <option value="">Select</option>
+                <option value="Local">Local</option>
+                <option value="Outstation">Outstation</option>
+              </select>
+            </label>
+          </div>
+          <div id="caseErrors" class="errors" hidden></div>
+          <div class="form-actions">
+            <button class="primary" type="submit">Submit</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="results" class="screen">
+        <header class="page-head">
+          <button class="icon-text" data-route="calculator">Edit Details</button>
+          <h2>Result Section</h2>
+        </header>
+        <div id="resultPanel" class="result-panel"></div>
+        <p class="disclaimer">Disclaimer - If any of the date above is falling on non-working day then the above results may become incorrect, for accurate results user is requested to enter holidays in calendar section</p>
+        <div class="form-actions">
+          <button id="generateOrder" class="primary" type="button">Generate Order</button>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="chequeDialog">
+      <form method="dialog" class="dialog-box">
+        <h3>Cheque Number</h3>
+        <label>Cheque Number (Optional)
+          <input id="chequeNumber" type="text" placeholder="Enter cheque number">
+        </label>
+        <div class="dialog-actions">
+          <button id="editCase" class="secondary" value="edit" type="button">Edit</button>
+          <button id="proceedCase" class="primary" value="proceed" type="button">Proceed</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="warningDialog">
+      <form method="dialog" class="dialog-box">
+        <h3>Limitation Warning</h3>
+        <div id="warningMessages" class="warning-list"></div>
+        <div class="dialog-actions">
+          <button id="warningEdit" class="secondary" type="button">Edit Date</button>
+          <button id="warningProceed" class="primary" type="button">Proceed Anyway</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dayDialog">
+      <form method="dialog" class="dialog-box">
+        <h3 id="dayDialogTitle">Modify Day</h3>
+        <p id="dayDialogInfo"></p>
+        <label>Holiday reason
+          <input id="holidayReason" type="text" placeholder="Holiday">
+        </label>
+        <div class="dialog-actions stacked">
+          <button id="markHoliday" class="primary" type="button">Mark as Holiday</button>
+          <button id="markWorking" class="secondary" type="button">Mark as Working Day</button>
+          <button id="clearOverride" class="plain" type="button">Clear User Change</button>
+          <button id="closeDayDialog" class="plain" type="button">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="datePickerDialog">
+      <form method="dialog" class="dialog-box date-picker">
+        <h3 id="datePickerTitle">Select Date</h3>
+        <div class="picker-toolbar">
+          <button id="pickerPrevYear" class="icon-text" type="button">Prev Year</button>
+          <button id="pickerPrevMonth" class="icon-text" type="button">Prev Month</button>
+          <button id="pickerToday" class="secondary" type="button">Today</button>
+          <button id="pickerNextMonth" class="icon-text" type="button">Next Month</button>
+          <button id="pickerNextYear" class="icon-text" type="button">Next Year</button>
+        </div>
+        <div class="picker-jump">
+          <label>Month
+            <select id="pickerMonth"></select>
+          </label>
+          <label>Year
+            <input id="pickerYear" type="number" min="1900" max="2100" step="1">
+          </label>
+        </div>
+        <div class="picker-week">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div id="datePickerGrid" class="picker-grid"></div>
+        <div class="dialog-actions">
+          <button id="closeDatePicker" class="plain" type="button">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script>
+const STORAGE_KEYS = {
+  jo: "negoCalculator.joDetails",
+  calendar: "negoCalculator.calendarOverrides"
+};
+
+const API = location.origin + "/api";
+const ROLE_PARAM = new URLSearchParams(location.search).get("role");
+const ROLE = ROLE_PARAM === "admin" ? "admin" : ((ROLE_PARAM === "staff" || ROLE_PARAM === "judge") ? "staff" : "advocate");
+
+const monthNames = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+const state = {
+  route: "home",
+  calendarYear: new Date().getFullYear(),
+  selectedDay: null,
+  datePickerTarget: null,
+  datePickerDate: new Date(),
+  pendingCase: null,
+  caseData: null,
+  results: null,
+  chequeNumber: "",
+  calendarOverrides: {}
+};
+let courtDetails = null;
+
+const $ = (id) => document.getElementById(id);
+
+document.addEventListener("DOMContentLoaded", async () => {
+  courtDetails = await fetchCourtDetails();
+  await loadCalendarOverrides();
+  applyRoleAccess();
+  bindNavigation();
+  bindForms();
+  bindDialogs();
+  bindDatePicker();
+  loadJoDetails();
+  loadDatePickerMonths();
+  renderCalendar();
+  route("home");
+});
+
+function applyRoleAccess() {
+  if (ROLE === "staff") {
+    document.querySelectorAll(".admin-only").forEach((el) => el.remove());
+    return;
+  }
+  if (ROLE === "admin") {
+    document.querySelectorAll(".staff-only, #generateOrder").forEach((el) => el.remove());
+    return;
+  }
+  document.querySelectorAll(".staff-only, .admin-only, #generateOrder").forEach((el) => el.remove());
+}
+
+function bindNavigation() {
+  document.querySelectorAll("[data-route]").forEach((button) => {
+    button.addEventListener("click", () => route(button.dataset.route));
+  });
+
+  $("prevYear").addEventListener("click", () => {
+    state.calendarYear -= 1;
+    renderCalendar();
+  });
+
+  $("nextYear").addEventListener("click", () => {
+    state.calendarYear += 1;
+    renderCalendar();
+  });
+
+  $("generateOrder")?.addEventListener("click", generateOrder);
+}
+
+function bindForms() {
+  $("joForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const details = {
+      name: $("joName").value.trim() || "N. A. Kulkarni",
+      designation: $("joDesignation").value.trim() || "42nd A. C. J. M.",
+      place: $("joPlace").value.trim() || "Ahmedabad City"
+    };
+    localStorage.setItem(STORAGE_KEYS.jo, JSON.stringify(details));
+    $("joSaved").hidden = false;
+    setTimeout(() => {
+      $("joSaved").hidden = true;
+    }, 2200);
+  });
+
+  $("caseForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const parsed = readCaseForm();
+    if (!parsed.ok) {
+      showErrors(parsed.errors);
+      return;
+    }
+    $("caseErrors").hidden = true;
+    state.pendingCase = parsed.data;
+    $("chequeDialog").showModal();
+  });
+}
+
+function bindDialogs() {
+  $("editCase").addEventListener("click", () => $("chequeDialog").close());
+
+  $("proceedCase").addEventListener("click", () => {
+    state.chequeNumber = $("chequeNumber").value.trim();
+    $("chequeDialog").close();
+    continueWithCase();
+  });
+
+  $("warningEdit").addEventListener("click", () => {
+    $("warningDialog").close();
+    route("calculator");
+  });
+
+  $("warningProceed").addEventListener("click", () => {
+    $("warningDialog").close();
+    showResults();
+  });
+
+  $("closeDayDialog").addEventListener("click", () => $("dayDialog").close());
+  $("markHoliday").addEventListener("click", () => saveDayOverride("holiday"));
+  $("markWorking").addEventListener("click", () => saveDayOverride("working"));
+  $("clearOverride").addEventListener("click", clearDayOverride);
+}
+
+function bindDatePicker() {
+  document.querySelectorAll("[data-date-picker]").forEach((button) => {
+    const targetId = button.dataset.datePicker;
+    button.addEventListener("click", () => openDatePicker(targetId));
+  });
+
+  ["chequeDate", "presentationDate", "returnMemoDate", "noticeDate", "receiptDate", "filingDate"].forEach((id) => {
+    $(id).addEventListener("dblclick", () => openDatePicker(id));
+  });
+
+  $("pickerPrevYear").addEventListener("click", () => shiftPickerYear(-1));
+  $("pickerNextYear").addEventListener("click", () => shiftPickerYear(1));
+  $("pickerPrevMonth").addEventListener("click", () => shiftPickerMonth(-1));
+  $("pickerNextMonth").addEventListener("click", () => shiftPickerMonth(1));
+  $("pickerToday").addEventListener("click", () => {
+    state.datePickerDate = clearTime(new Date());
+    updatePickerControls();
+    renderDatePicker();
+  });
+  $("pickerMonth").addEventListener("change", () => {
+    const date = new Date(state.datePickerDate);
+    date.setDate(1);
+    date.setMonth(Number($("pickerMonth").value));
+    state.datePickerDate = clearTime(date);
+    renderDatePicker();
+  });
+  $("pickerYear").addEventListener("change", () => {
+    const year = clamp(Number($("pickerYear").value), 1900, 2100);
+    $("pickerYear").value = year;
+    const date = new Date(state.datePickerDate);
+    date.setDate(1);
+    date.setFullYear(year);
+    state.datePickerDate = clearTime(date);
+    renderDatePicker();
+  });
+  $("closeDatePicker").addEventListener("click", () => $("datePickerDialog").close());
+}
+
+function route(name) {
+  state.route = name;
+  document.querySelectorAll(".screen").forEach((screen) => {
+    screen.classList.toggle("active", screen.id === name);
+  });
+  if (name === "calendar") renderCalendar();
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+function loadJoDetails() {
+  const details = getJoDetails();
+  $("joName").value = details.name;
+  $("joDesignation").value = details.designation;
+  $("joPlace").value = details.place;
+}
+
+function loadDatePickerMonths() {
+  $("pickerMonth").innerHTML = monthNames
+    .map((name, index) => `<option value="${index}">${name}</option>`)
+    .join("");
+}
+
+function getJoDetails() {
+  const english = (courtDetails || selectedCourtFromStorage() || {}).english || {};
+  if (english.judge_name || english.judge_designation || english.place) {
+    return {
+      name: english.judge_name || "N. A. Kulkarni",
+      designation: english.judge_designation || "42nd A. C. J. M.",
+      place: english.place || "Ahmedabad City"
+    };
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.jo));
+    const savedDesignation = saved?.designation || "";
+    return {
+      name: saved?.name || "N. A. Kulkarni",
+      designation: /^36th\s+ACJM$/i.test(savedDesignation) ? "42nd A. C. J. M." : (savedDesignation || "42nd A. C. J. M."),
+      place: saved?.place || "Ahmedabad City"
+    };
+  } catch {
+    return { name: "N. A. Kulkarni", designation: "42nd A. C. J. M.", place: "Ahmedabad City" };
+  }
+}
+
+function selectedCourtFromStorage() {
+  try {
+    return JSON.parse(localStorage.getItem("selected_court") || "null");
+  } catch {
+    return null;
+  }
+}
+
+async function fetchCourtDetails() {
+  const stored = selectedCourtFromStorage();
+  if (stored?.english) return stored;
+  try {
+    const selectedCourtId = localStorage.getItem("selected_court_id") || "";
+    const url = selectedCourtId ? `${API}/courts/${encodeURIComponent(selectedCourtId)}` : `${API}/courts/default`;
+    const response = await fetch(url);
+    if (response.ok) return await response.json();
+  } catch {}
+  return null;
+}
+
+function readCaseForm() {
+  const fields = [
+    ["chequeDate", "Date of Cheque"],
+    ["presentationDate", "Cheque Presentation Date"],
+    ["returnMemoDate", "Return Memo Date"],
+    ["noticeDate", "Demand Notice Date"],
+    ["receiptDate", "Demand Notice Receipt Date"],
+    ["filingDate", "Complaint Filing Date"]
+  ];
+
+  const data = {};
+  const errors = [];
+
+  fields.forEach(([id, label]) => {
+    const value = $(id).value.trim();
+    const parsed = parseInputDate(value);
+    if (!value) {
+      errors.push(`${label} is mandatory.`);
+    } else if (!parsed) {
+      errors.push(`${label} must be a valid date in DD/MM/YYYY format.`);
+    } else {
+      data[id] = parsed;
+    }
+  });
+
+  const location = $("accusedLocation").value;
+  if (!location) errors.push("Accused Local / Outstation selection is mandatory.");
+  data.accusedLocation = location;
+
+  addChronologyErrors(data, errors);
+
+  return errors.length ? { ok: false, errors } : { ok: true, data };
+}
+
+function addChronologyErrors(data, errors) {
+  const hasDates = (...ids) => ids.every((id) => data[id] instanceof Date);
+  const isPrior = (laterId, earlierId) => compareDates(data[laterId], data[earlierId]) < 0;
+
+  const rules = [
+    ["presentationDate", "Cheque Presentation Date", [["chequeDate", "Date of Cheque"]]],
+    ["returnMemoDate", "Return Memo Date", [["chequeDate", "Date of Cheque"], ["presentationDate", "Cheque Presentation Date"]]],
+    ["noticeDate", "Demand Notice Date (As per Postal Slip)", [["chequeDate", "Date of Cheque"], ["presentationDate", "Cheque Presentation Date"], ["returnMemoDate", "Return Memo Date"]]],
+    ["receiptDate", "Demand Notice Receipt Date", [["chequeDate", "Date of Cheque"], ["presentationDate", "Cheque Presentation Date"], ["returnMemoDate", "Return Memo Date"], ["noticeDate", "Demand Notice Date (As per Postal Slip)"]]],
+    ["filingDate", "Complaint Filing Date", [["chequeDate", "Date of Cheque"], ["presentationDate", "Cheque Presentation Date"], ["returnMemoDate", "Return Memo Date"], ["noticeDate", "Demand Notice Date (As per Postal Slip)"], ["receiptDate", "Demand Notice Receipt Date"]]]
+  ];
+
+  rules.forEach(([laterId, laterLabel, earlierFields]) => {
+    earlierFields.forEach(([earlierId, earlierLabel]) => {
+      if (hasDates(laterId, earlierId) && isPrior(laterId, earlierId)) {
+        errors.push(`${laterLabel} must not be prior to ${earlierLabel}.`);
+      }
+    });
+  });
+
+  if (hasDates("filingDate", "receiptDate")) {
+    const offenceCommissionDate = addDays(data.receiptDate, 16);
+    if (compareDates(data.filingDate, offenceCommissionDate) < 0) {
+      errors.push(`Complaint Filing Date must not fall within the 15 days available to the accused for making payment after receipt of demand notice. Earliest permissible complaint filing date is ${formatDisplayDate(offenceCommissionDate)}.`);
+    }
+  }
+}
+
+function showErrors(errors) {
+  $("caseErrors").innerHTML = errors.map((error) => `<p>${escapeHtml(error)}</p>`).join("");
+  $("caseErrors").hidden = false;
+}
+
+function continueWithCase() {
+  state.caseData = state.pendingCase;
+  state.results = calculateResults(state.caseData);
+  const warnings = buildWarnings(state.caseData, state.results);
+
+  if (warnings.length) {
+    $("warningMessages").innerHTML = warnings.map((warning) => `<p>${escapeHtml(warning)}</p>`).join("");
+    $("warningDialog").showModal();
+    return;
+  }
+
+  showResults();
+}
+
+function showResults() {
+  renderResults();
+  route("results");
+}
+
+function calculateResults(data) {
+  const presentationRaw = addMonths(data.chequeDate, 3);
+  const noticeRaw = addDays(data.returnMemoDate, 30);
+  const offence = addDays(data.receiptDate, 16);
+  const filingRaw = addDays(addMonths(offence, 1), -1);
+
+  const presentation = moveToWorkingDay(presentationRaw);
+  const notice = moveToWorkingDay(noticeRaw);
+  const filing = moveToWorkingDay(filingRaw);
+
+  const delayed = compareDates(data.filingDate, filing.date) > 0;
+  const delayDays = delayed ? calculateDelayDays(filing.date, data.filingDate) : 0;
+
+  return {
+    presentation,
+    notice,
+    offence,
+    filing,
+    delayed,
+    delayDays
+  };
+}
+
+function buildWarnings(data, results) {
+  const warnings = [];
+  if (compareDates(data.presentationDate, results.presentation.date) > 0) {
+    warnings.push("The date entered is beyond limitation of 3 months for presentation of cheque.");
+  }
+  if (compareDates(data.noticeDate, results.notice.date) > 0) {
+    warnings.push("The date entered is beyond limitation of 30 days from date of return memo.");
+  }
+  if (compareDates(data.filingDate, results.filing.date) > 0) {
+    warnings.push("The date entered is beyond limitation of 1 month for filing of complaint.");
+  }
+  return warnings;
+}
+
+function renderResults() {
+  const items = [
+    ["Last Date of Presentation of Cheque", formatDisplayDate(state.results.presentation.date), state.results.presentation],
+    ["Last Date of Demand Notice", formatDisplayDate(state.results.notice.date), state.results.notice],
+    ["Offence Commission Date", formatDisplayDate(state.results.offence), null],
+    ["Last Date of Filing Complaint", formatDisplayDate(state.results.filing.date), state.results.filing],
+    ["Delay In Filing Complaint", state.results.delayed ? "Yes" : "No", null],
+    ["Delay In Days", String(state.results.delayDays), null]
+  ];
+
+  $("resultPanel").innerHTML = `
+    <div class="result-list">
+      ${items.map(([label, value, adjustment]) => `
+        <div class="result-row">
+          <div>${escapeHtml(label)}</div>
+          <div class="result-value">${escapeHtml(value)}</div>
+          ${adjustment?.adjusted ? `<div class="adjustment">${escapeHtml(adjustment.message)}</div>` : ""}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function parseInputDate(value) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return clearTime(date);
+}
+
+function formatDisplayDate(date) {
+  return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
+}
+
+function formatInputDate(date) {
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+function keyForDate(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return clearTime(next);
+}
+
+function addMonths(date, months) {
+  const originalDay = date.getDate();
+  const next = new Date(date);
+  next.setDate(1);
+  next.setMonth(next.getMonth() + months);
+  const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  next.setDate(Math.min(originalDay, lastDay));
+  return clearTime(next);
+}
+
+function clearTime(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function compareDates(a, b) {
+  return clearTime(a).getTime() - clearTime(b).getTime();
+}
+
+function daysBetween(a, b) {
+  return Math.round((clearTime(b).getTime() - clearTime(a).getTime()) / 86400000);
+}
+
+function calculateDelayDays(lastDate, filingDate) {
+  const difference = daysBetween(lastDate, filingDate);
+  return Math.max(1, difference - 1);
+}
+
+function pad(value) {
+  return String(value).padStart(2, "0");
+}
+
+function clamp(value, min, max) {
+  if (!Number.isFinite(value)) return new Date().getFullYear();
+  return Math.min(max, Math.max(min, value));
+}
+
+function openDatePicker(targetId) {
+  state.datePickerTarget = targetId;
+  const currentValue = $(targetId).value.trim();
+  const parsed = parseInputDate(currentValue);
+  state.datePickerDate = parsed || clearTime(new Date());
+  $("datePickerTitle").textContent = getDateFieldLabel(targetId);
+  updatePickerControls();
+  renderDatePicker();
+  $("datePickerDialog").showModal();
+}
+
+function getDateFieldLabel(targetId) {
+  const labels = {
+    chequeDate: "Select Date of Cheque",
+    presentationDate: "Select Cheque Presentation Date",
+    returnMemoDate: "Select Return Memo Date",
+    noticeDate: "Select Demand Notice Date",
+    receiptDate: "Select Demand Notice Receipt Date",
+    filingDate: "Select Complaint Filing Date"
+  };
+  return labels[targetId] || "Select Date";
+}
+
+function shiftPickerMonth(amount) {
+  const date = new Date(state.datePickerDate);
+  date.setDate(1);
+  date.setMonth(date.getMonth() + amount);
+  state.datePickerDate = clearTime(date);
+  updatePickerControls();
+  renderDatePicker();
+}
+
+function shiftPickerYear(amount) {
+  const date = new Date(state.datePickerDate);
+  date.setDate(1);
+  date.setFullYear(date.getFullYear() + amount);
+  state.datePickerDate = clearTime(date);
+  updatePickerControls();
+  renderDatePicker();
+}
+
+function updatePickerControls() {
+  $("pickerMonth").value = String(state.datePickerDate.getMonth());
+  $("pickerYear").value = state.datePickerDate.getFullYear();
+}
+
+function renderDatePicker() {
+  updatePickerControls();
+  const selected = parseInputDate($(state.datePickerTarget)?.value?.trim() || "");
+  const selectedKey = selected ? keyForDate(selected) : "";
+  const todayKey = keyForDate(new Date());
+  const year = state.datePickerDate.getFullYear();
+  const month = state.datePickerDate.getMonth();
+  const first = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const blanks = Array.from({ length: first.getDay() }, () => `<button class="picker-day blank" tabindex="-1"></button>`).join("");
+  const days = Array.from({ length: lastDay }, (_, index) => {
+    const date = new Date(year, month, index + 1);
+    const key = keyForDate(date);
+    const classes = ["picker-day"];
+    if (key === selectedKey) classes.push("selected");
+    if (key === todayKey) classes.push("today");
+    return `<button class="${classes.join(" ")}" type="button" data-picker-date="${key}">${index + 1}</button>`;
+  }).join("");
+
+  $("datePickerGrid").innerHTML = blanks + days;
+  $("datePickerGrid").querySelectorAll("[data-picker-date]").forEach((button) => {
+    button.addEventListener("click", () => selectPickerDate(button.dataset.pickerDate));
+  });
+}
+
+function selectPickerDate(key) {
+  if (!state.datePickerTarget) return;
+  const [year, month, day] = key.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  $(state.datePickerTarget).value = formatInputDate(date);
+  $("datePickerDialog").close();
+  $(state.datePickerTarget).focus();
+}
+
+function getCalendarOverrides() {
+  return state.calendarOverrides || {};
+}
+
+function setCalendarOverrides(overrides) {
+  state.calendarOverrides = overrides || {};
+  localStorage.setItem(STORAGE_KEYS.calendar, JSON.stringify(overrides));
+  fetch(`${API}/limitation-calendar`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ overrides: state.calendarOverrides })
+  }).catch(() => {});
+}
+
+async function loadCalendarOverrides() {
+  try {
+    const response = await fetch(`${API}/limitation-calendar`);
+    if (response.ok) {
+      state.calendarOverrides = await response.json();
+      localStorage.setItem(STORAGE_KEYS.calendar, JSON.stringify(state.calendarOverrides));
+      return;
+    }
+  } catch {}
+  try {
+    state.calendarOverrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.calendar)) || {};
+  } catch {
+    state.calendarOverrides = {};
+  }
+}
+
+function getDefaultHoliday(date) {
+  const day = date.getDay();
+  if (day === 0) return "Sunday";
+  if (day === 6) {
+    const saturdayCount = Math.floor((date.getDate() - 1) / 7) + 1;
+    if (saturdayCount === 2) return "2nd Saturday";
+    if (saturdayCount === 4) return "4th Saturday";
+  }
+  return "";
+}
+
+function getDayStatus(date) {
+  const overrides = getCalendarOverrides();
+  const key = keyForDate(date);
+  const override = overrides[key];
+  const defaultReason = getDefaultHoliday(date);
+
+  if (override?.type === "working") {
+    return { nonWorking: false, source: "working", reason: "Working day" };
+  }
+  if (override?.type === "holiday") {
+    return { nonWorking: true, source: "custom", reason: override.reason || "Holiday" };
+  }
+  if (defaultReason) {
+    return { nonWorking: true, source: "default", reason: defaultReason };
+  }
+  return { nonWorking: false, source: "normal", reason: "" };
+}
+
+function moveToWorkingDay(date) {
+  const original = clearTime(date);
+  let current = clearTime(date);
+  let status = getDayStatus(current);
+  if (!status.nonWorking) {
+    return { date: current, adjusted: false, original, reason: "" };
+  }
+
+  const reason = status.reason;
+  while (status.nonWorking) {
+    current = addDays(current, 1);
+    status = getDayStatus(current);
+  }
+
+  return {
+    date: current,
+    adjusted: true,
+    original,
+    reason,
+    message: `Since the earlier day Dt. ${formatDisplayDate(original)} was ${reason}, the subsequent working day is taken into consideration.`
+  };
+}
+
+function renderCalendar() {
+  $("calendarYear").textContent = state.calendarYear;
+  const todayKey = keyForDate(new Date());
+  const html = monthNames.map((month, monthIndex) => {
+    const first = new Date(state.calendarYear, monthIndex, 1);
+    const lastDay = new Date(state.calendarYear, monthIndex + 1, 0).getDate();
+    const blanks = Array.from({ length: first.getDay() }, () => `<button class="day blank" tabindex="-1"></button>`).join("");
+    const days = Array.from({ length: lastDay }, (_, index) => {
+      const date = new Date(state.calendarYear, monthIndex, index + 1);
+      const status = getDayStatus(date);
+      const classes = ["day"];
+      if (status.source === "default") classes.push("default-holiday");
+      if (status.source === "custom") classes.push("custom-holiday");
+      if (status.source === "working") classes.push("working-day");
+      if (keyForDate(date) === todayKey) classes.push("today");
+      return `<button class="${classes.join(" ")}" type="button" data-date="${keyForDate(date)}" title="${escapeHtml(status.reason || "Working day")}">${index + 1}</button>`;
+    }).join("");
+
+    return `
+      <section class="month">
+        <h3>${month}</h3>
+        <div class="week"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+        <div class="days">${blanks}${days}</div>
+      </section>
+    `;
+  }).join("");
+
+  $("calendarGrid").innerHTML = html;
+  $("calendarGrid").querySelectorAll("[data-date]").forEach((button) => {
+    button.addEventListener("click", () => openDayDialog(button.dataset.date));
+  });
+}
+
+function openDayDialog(key) {
+  const [year, month, day] = key.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const status = getDayStatus(date);
+  state.selectedDay = key;
+  $("dayDialogTitle").textContent = formatDisplayDate(date);
+  $("dayDialogInfo").textContent = status.nonWorking ? `Currently non-working: ${status.reason}` : "Currently working day.";
+  $("holidayReason").value = status.source === "custom" ? status.reason : "";
+  $("dayDialog").showModal();
+}
+
+function saveDayOverride(type) {
+  if (!state.selectedDay) return;
+  const overrides = getCalendarOverrides();
+  if (type === "holiday") {
+    overrides[state.selectedDay] = {
+      type: "holiday",
+      reason: $("holidayReason").value.trim() || "Holiday"
+    };
+  } else {
+    overrides[state.selectedDay] = { type: "working" };
+  }
+  setCalendarOverrides(overrides);
+  $("dayDialog").close();
+  renderCalendar();
+}
+
+function clearDayOverride() {
+  if (!state.selectedDay) return;
+  const overrides = getCalendarOverrides();
+  delete overrides[state.selectedDay];
+  setCalendarOverrides(overrides);
+  $("dayDialog").close();
+  renderCalendar();
+}
+
+function generateOrder() {
+  if (!state.caseData || !state.results) return;
+  const jo = getJoDetails();
+  const systemDate = formatDisplayDate(new Date());
+  const cheque = state.chequeNumber || "";
+  const orderHtml = state.caseData.accusedLocation === "Local"
+    ? wrapPrintDocument(orderPage(localOrder(cheque, jo, systemDate)))
+    : wrapPrintDocument(`${orderPage(outstationFirstOrder(cheque, jo, systemDate))}${orderPage(outstationSecondOrder(cheque, jo, systemDate), true)}`);
+
+  const printWindow = window.open("", "_blank", "width=900,height=900");
+  if (!printWindow) {
+    alert("Please allow pop-ups to generate the printable order.");
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(orderHtml);
+  printWindow.document.close();
+  printWindow.focus();
+}
+
+function wrapPrintDocument(content) {
+  return `<!doctype html>
+  <html>
+    <head>
+      <title>Nego Order</title>
+      <style>
+        @page {
+          size: A4;
+          margin: 18mm 18mm 16mm;
+        }
+        html,
+        body {
+          background: #fff;
+          color: #000;
+          margin: 0;
+        }
+        .print-doc {
+          font-family: "Times New Roman";
+          color: #000;
+          max-width: 180mm;
+          margin: 0 auto;
+          line-height: 1.28;
+          font-size: 14pt;
+        }
+        .print-doc h1 {
+          color: #000;
+          font-size: 14pt;
+          text-align: left;
+          margin: 0 0 16px;
+          font-weight: bold;
+        }
+        .print-doc .title {
+          text-align: center;
+          font-weight: bold;
+          margin: 10px 0 14px;
+        }
+        .print-doc p {
+          margin: 0 0 10px;
+          text-align: justify;
+          text-justify: inter-word;
+        }
+        .print-doc .order-page {
+          page-break-inside: avoid;
+          break-inside: avoid;
+          min-height: 260mm;
+          padding-top: 2mm;
+        }
+        .print-doc .order-page.page-break {
+          page-break-before: always;
+          break-before: page;
+        }
+        .print-doc .sign {
+          margin-top: 24px;
+          text-align: right;
+        }
+        .print-doc .sign p,
+        .print-doc .date-line,
+        .print-doc .place-line {
+          text-align: left;
+        }
+        .print-doc .sign p {
+          text-align: right;
+        }
+        .print-controls {
+          max-width: 760px;
+          margin: 18px auto;
+          font-family: "Times New Roman";
+        }
+        .print-controls button {
+          padding: 10px 16px;
+          border-radius: 8px;
+          border: 1px solid #1e3a8a;
+          background: #1e3a8a;
+          color: white;
+          font-weight: 700;
+        }
+        @media print {
+          .print-controls { display: none; }
+          .print-doc { max-width: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="print-controls">
+        <button onclick="window.print()">Print / Save as PDF</button>
+      </div>
+      <main class="print-doc">${content}</main>
+      <script>setTimeout(function(){ window.print(); }, 500);<\/script>
+    </body>
+  </html>`;
+}
+
+function orderPage(content, pageBreak = false) {
+  return `<section class="order-page${pageBreak ? " page-break" : ""}">${content}</section>`;
+}
+
+function signature(jo, systemDate) {
+  const place = String(jo.place || "Ahmedabad City").replace(/\.+$/, "");
+  return `
+    <p class="date-line">Dt. ${systemDate}.</p>
+    <p class="place-line">Place - ${escapeHtml(place)}.</p>
+    <div class="sign">
+      <p>(${escapeHtml(jo.name)})<br>${escapeHtml(jo.designation)}</p>
+    </div>
+  `;
+}
+
+function localOrder(cheque, jo, systemDate) {
+  return `
+    <h1>Order for the case having Cheque No. - ${escapeHtml(cheque)}</h1>
+    <p class="title">:: Order Below Ex. 1::<br>(Read Sec. 223 of BNSS).</p>
+    <p>Today the matter is placed before this Court.</p>
+    <p>So, far the question relating to giving an opportunity of hearing to the accused is concerned, Hon'ble Apex Court in the case of Sanjabij Tari Versus Kishore S.Borcar - 2025 (0) AIJEL-SC 75934 has already settled that, "since NI Act is a special enactment, there is no need for the Magistrate to issue summons to the accused before taking cognizance (under Section 223 of BNSS) of complaints filed under Section 138 of NI Act".</p>
+    <p>Apart from that, considering the facts emerging at this juncture it appears that, the offence as said within the complaint appears to have been committed and thereby the cognizance of the matter is required to be taken. Further, Observing the complaint it appears that, prosecution has already proposed witness/es, as mandated U/Sec. 227(2) of BNSS. Hence, the cognizance of the matter is hereby ordered to be taken against the accused who has signed the instrument and only such person be considered as accused in the matter herein-after for further directions. If there happens to be any other person as accused who hasn't signed the instrument cognizance of the matter cannot be taken against such person.</p>
+    <p>Thus, the summon shall be issued against the accused of the matter returnable upon such date fixed by this Court.</p>
+    ${signature(jo, systemDate)}
+  `;
+}
+
+function outstationFirstOrder(cheque, jo, systemDate) {
+  return `
+    <h1>Order for the case having Cheque No. - ${escapeHtml(cheque)}</h1>
+    <p class="title">:: Order Below Ex. 1::<br>(Read Sec. 223 of BNSS).</p>
+    <p>Today the matter is placed before this Court.</p>
+    <p>So, far the question relating to giving an opportunity of hearing to the accused is concerned, Hon'ble Apex Court in the case of Sanjabij Tari Versus Kishore S.Borcar - 2025 (0) AIJEL-SC 75934 has already settled that, "since NI Act is a special enactment, there is no need for the Magistrate to issue summons to the accused before taking cognizance (under Section 223 of BNSS) of complaints filed under Section 138 of NI Act".</p>
+    <p>Apart from that, considering the facts emerging at this juncture it appears that, the offence as said within the complaint appears to have been committed and thereby the cognizance of the matter is required to be taken. Hence, the cognizance of the matter is hereby ordered to be taken against the accused who has signed the instrument and only such person be considered as accused in the matter herein-after for further directions. If there happens to be any other person as accused who hasn't signed the instrument cognizance of the matter cannot be taken against such person.</p>
+    <p>Since, the accused of the matter resides beyond the jurisdiction of this Court, considering mandate U/sec. 225(1) of BNSS, the matter shall be kept for further Magisterial Inquiry and such further order thereon.</p>
+    ${signature(jo, systemDate)}
+  `;
+}
+
+function outstationSecondOrder(cheque, jo, systemDate) {
+  return `
+    <h1>Order for the case having Cheque No. - ${escapeHtml(cheque)}</h1>
+    <p class="title">::Further Order Below Ex. 1::<br>(Read Sec. 225 of BNSS).</p>
+    <p>Today the matter is placed before this Court. Considering the facts emerging at this juncture it appears that, the offence as said within the complaint appears to have been committed and thereby the cognizance of the matter has already been taken. Observing the complaint it appears that, prosecution has already proposed witness/es, as mandated U/Sec. 227(2) of BNSS. Further considering the entire record of the matter, this Court is satisfied after making necessary Magisterial inquiry to proceed with the matter.</p>
+    <p>Thus, the summon shall be issued against the accused of the matter returnable upon such date fixed by this Court.</p>
+    ${signature(jo, systemDate)}
+  `;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[char]));
+}
+
+</script>
+    <script>
+    /* NyayDwar header bar: Back / Home in the same place as the rest of the app.
+       Back works exactly like the page's own Back buttons. */
+    (function () {
+      var user = null; try { user = JSON.parse(localStorage.getItem("user") || "null"); } catch (e) {}
+      var role = user && user.role;
+      var home = role === "judge" ? "/judge-desk/dashboard" : role === "admin" ? "/admin" : role === "staff" ? "/staff"
+        : (localStorage.getItem("selected_court") ? "/advocate/menu" : (role || localStorage.getItem("acjm_public_mode") ? "/advocate" : "/"));
+      var bar = document.createElement("header");
+      bar.className = "nd-topbar";
+      bar.innerHTML = '<div class="nd-row"><button type="button" class="nd-btn" id="ndBack">&larr; Back</button>' +
+        '<div><p class="nd-eyebrow">Limitation Calculator</p><h2 id="ndTitle">Nego. Limitation Calculator</h2></div></div>' +
+        '<div class="nd-row"><button type="button" class="nd-btn" id="ndHome">Home</button></div>';
+      var shell = document.querySelector("main.shell");
+      shell.parentNode.insertBefore(bar, shell);
+      function active() { return document.querySelector(".screen.active"); }
+      function syncTitle() {
+        var a = active(); var h = a && a.querySelector(".page-head h2");
+        document.getElementById("ndTitle").textContent = h ? h.textContent : "Nego. Limitation Calculator";
+      }
+      document.getElementById("ndBack").onclick = function () {
+        var a = active();
+        var own = a && (a.querySelector('.page-head [data-route="home"]') || a.querySelector(".page-head [data-route]"));
+        if (a && a.id !== "home" && own) { own.click(); return; }
+        history.back();
+      };
+      document.getElementById("ndHome").onclick = function () { location.href = home; };
+      new MutationObserver(syncTitle).observe(shell, { subtree: true, attributes: true, attributeFilter: ["class"] });
+      syncTitle();
+    })();
+    </script>
+    <script src="/static/js/acjm-side-nav.js?v=20260928"></script>
+</body>
+</html>
+

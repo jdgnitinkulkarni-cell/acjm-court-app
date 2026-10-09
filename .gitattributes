@@ -1,0 +1,11 @@
+# Keep script line endings correct whichever computer the repository is used on
+* text=auto
+*.sh text eol=lf
+*.command text eol=lf
+*.py text eol=lf
+*.bat text eol=crlf
+*.ttf binary
+*.ico binary
+*.icns binary
+*.png binary
+*.jpg binary

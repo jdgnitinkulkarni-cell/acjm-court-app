@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Application Law Details</title>
+  <link rel="stylesheet" href="/static/css/main.css" />
+  <style>
+    .law-card { max-width: 980px; }
+    .law-grid { display:grid; grid-template-columns: 180px 1fr; gap:14px; align-items:center; }
+    .law-grid input, textarea { border:1px solid #d4c8b0; border-radius:4px; font-family:inherit; font-size:15px; padding:10px 12px; }
+    .scope-row { display:flex; flex-wrap:wrap; gap:10px; }
+    .scope-row label { align-items:center; display:flex; gap:6px; }
+    .law-list { margin-top:24px; display:grid; gap:10px; }
+    .law-item { border:1px solid #e2d8c8; border-radius:6px; padding:12px; display:flex; justify-content:space-between; gap:14px; align-items:center; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="topbar">
+      <h2>Application Law Details</h2>
+      <button class="btn btn-secondary" onclick="location.href='/admin'">Back</button>
+    </div>
+    <div class="page law-card">
+      <h1>Application / Pursis / Surety Law Master</h1>
+      <div class="section-title">Add New Law</div>
+      <div class="law-grid">
+        <label>English Law Text</label><input id="law-en" placeholder="Sec. ..." />
+        <label>Gujarati Law Text</label><input id="law-gu" placeholder="કલમ ..." />
+        <label>Apply To</label>
+        <div class="scope-row">
+          <label><input type="checkbox" value="plea" checked /> Plea</label>
+          <label><input type="checkbox" value="application" checked /> Application</label>
+          <label><input type="checkbox" value="pursis" checked /> Pursis</label>
+          <label><input type="checkbox" value="surety" checked /> Surety / Bond</label>
+        </div>
+      </div>
+      <p id="msg" class="hint"></p>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveLaw()">Add Law</button>
+      </div>
+      <div class="section-title">Existing Laws</div>
+      <div id="law-list" class="law-list"></div>
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Complainant Master</span>
+        <span>
+          <button class="btn btn-outline" onclick="downloadComplainants()">Download Excel Template</button>
+          <button class="btn btn-primary" onclick="document.getElementById('complainant-upload').click()">Upload Excel Template</button>
+          <input id="complainant-upload" type="file" accept=".xlsx,.xml,.txt,.csv" style="display:none" onchange="uploadComplainants(event)" />
+        </span>
+      </div>
+      <div class="law-grid">
+        <label>Complainant Name</label><input id="complainant-name" />
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveComplainant()">Add Complainant</button>
+      </div>
+      <div id="complainant-list" class="law-list"></div>
+    </div>
+  </div>
+  <script>
+    const API = location.origin + "/api";
+    const token = localStorage.getItem("token") || "";
+    const q = (s) => document.querySelector(s);
+    const esc = (v) => String(v || "").replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+    async function loadLaws(){
+      const res = await fetch(`${API}/laws`);
+      const laws = await res.json();
+      q("#law-list").innerHTML = laws.map(law => `
+        <div class="law-item">
+          <div>
+            <strong>${esc(law.english)}</strong><br/>
+            <span>${esc(law.gujarati)}</span><br/>
+            <small>${esc((law.applies_to || []).join(", "))}</small>
+          </div>
+          <button class="btn btn-danger" onclick="deleteLaw('${esc(law.id)}')">Delete</button>
+        </div>`).join("") || `<p class="hint">No law entries found.</p>`;
+    }
+
+    async function loadComplainants(){
+      const res = await fetch(`${API}/complainants`);
+      const items = await res.json();
+      q("#complainant-list").innerHTML = items.map(item => `
+        <div class="law-item"><strong>${esc(item.name)}</strong><button class="btn btn-danger" onclick="deleteComplainant('${esc(item.id)}')">Delete</button></div>
+      `).join("") || `<p class="hint">No complainants found.</p>`;
+    }
+
+    async function saveLaw(){
+      const english = q("#law-en").value.trim();
+      const gujarati = q("#law-gu").value.trim();
+      const applies_to = Array.from(document.querySelectorAll(".scope-row input:checked")).map(i => i.value);
+      if(!english || !gujarati){ q("#msg").textContent = "Please enter both English and Gujarati law text."; return; }
+      const res = await fetch(`${API}/laws`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "Authorization":`Bearer ${token}` },
+        body: JSON.stringify({ english, gujarati, applies_to })
+      });
+      if(!res.ok){ q("#msg").textContent = "Unable to save law. Please login as admin again."; return; }
+      q("#law-en").value = ""; q("#law-gu").value = ""; q("#msg").textContent = "Law added.";
+      await loadLaws();
+    }
+
+    async function deleteLaw(id){
+      if(!confirm("Delete this law entry?")) return;
+      const res = await fetch(`${API}/laws/${id}`, { method:"DELETE", headers:{ "Authorization":`Bearer ${token}` } });
+      q("#msg").textContent = res.ok ? "Law deleted." : "Unable to delete law.";
+      await loadLaws();
+    }
+
+    async function saveComplainant(){
+      const name = q("#complainant-name").value.trim();
+      if(!name){ q("#msg").textContent = "Enter complainant name."; return; }
+      const res = await fetch(`${API}/complainants`, { method:"POST", headers:{ "Content-Type":"application/json", "Authorization":`Bearer ${token}` }, body: JSON.stringify({ name }) });
+      q("#msg").textContent = res.ok ? "Complainant added." : "Unable to add complainant.";
+      q("#complainant-name").value = "";
+      await loadComplainants();
+    }
+
+    async function deleteComplainant(id){
+      if(!confirm("Delete this complainant?")) return;
+      const res = await fetch(`${API}/complainants/${id}`, { method:"DELETE", headers:{ "Authorization":`Bearer ${token}` } });
+      q("#msg").textContent = res.ok ? "Complainant deleted." : "Unable to delete complainant.";
+      await loadComplainants();
+    }
+
+    function crc32(bytes){let t=crc32.t;if(!t){t=crc32.t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;t[i]=c>>>0}}let c=0xffffffff;for(const b of bytes)c=t[(c^b)&255]^(c>>>8);return(c^0xffffffff)>>>0}
+    const u16=n=>[n&255,(n>>>8)&255], u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+    function zipStore(files){const enc=new TextEncoder(),parts=[],central=[];let offset=0;const now=new Date(),dosTime=(now.getHours()<<11)|(now.getMinutes()<<5)|Math.floor(now.getSeconds()/2),dosDate=((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();for(const f of files){const name=enc.encode(f.name),data=typeof f.content==="string"?enc.encode(f.content):f.content,crc=crc32(data),local=new Uint8Array([0x50,0x4b,0x03,0x04,...u16(20),...u16(0),...u16(0),...u16(dosTime),...u16(dosDate),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)]);parts.push(local,name,data);central.push({name,crc,size:data.length,offset});offset+=local.length+name.length+data.length}const start=offset;for(const f of central){const head=new Uint8Array([0x50,0x4b,0x01,0x02,...u16(20),...u16(20),...u16(0),...u16(0),...u16(dosTime),...u16(dosDate),...u32(f.crc),...u32(f.size),...u32(f.size),...u16(f.name.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(f.offset)]);parts.push(head,f.name);offset+=head.length+f.name.length}parts.push(new Uint8Array([0x50,0x4b,0x05,0x06,...u16(0),...u16(0),...u16(central.length),...u16(central.length),...u32(offset-start),...u32(start),...u16(0)]));return new Blob(parts,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})}
+    function xlsxCell(ref,value){return `<c r="${ref}" t="inlineStr"><is><t>${esc(value||"")}</t></is></c>`}
+    function colName(i){let n="";i+=1;while(i){const m=(i-1)%26;n=String.fromCharCode(65+m)+n;i=Math.floor((i-m)/26)}return n}
+    function sheetXml(rows){return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.map((r,ri)=>`<row r="${ri+1}">${r.map((c,ci)=>xlsxCell(`${colName(ci)}${ri+1}`,c)).join("")}</row>`).join("")}</sheetData></worksheet>`}
+    function makeXlsx(rows){return zipStore([{name:"[Content_Types].xml",content:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`},{name:"_rels/.rels",content:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},{name:"xl/workbook.xml",content:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Complainants" sheetId="1" r:id="rId1"/></sheets></workbook>`},{name:"xl/_rels/workbook.xml.rels",content:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`},{name:"xl/worksheets/sheet1.xml",content:sheetXml(rows)}])}
+    function downloadComplainants(){
+      const blob = makeXlsx([["name"],["Complainant Name"],[""]]);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "complainant-master-template.xlsx";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function unzipXlsx(buffer){const bytes=new Uint8Array(buffer),dec=new TextDecoder(),files={};let p=0;while(p+30<bytes.length&&bytes[p]===0x50&&bytes[p+1]===0x4b&&bytes[p+2]===0x03&&bytes[p+3]===0x04){const method=bytes[p+8]|(bytes[p+9]<<8),size=bytes[p+18]|(bytes[p+19]<<8)|(bytes[p+20]<<16)|(bytes[p+21]<<24),nameLen=bytes[p+26]|(bytes[p+27]<<8),extraLen=bytes[p+28]|(bytes[p+29]<<8),name=dec.decode(bytes.slice(p+30,p+30+nameLen)),start=p+30+nameLen+extraLen,raw=bytes.slice(start,start+size);if(method===0)files[name]=dec.decode(raw);else if(method===8&&window.DecompressionStream){const stream=new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));files[name]=dec.decode(await new Response(stream).arrayBuffer())}p=start+size}return files}
+    function namesFromSheetXml(xml){const doc=new DOMParser().parseFromString(xml,"text/xml");return Array.from(doc.getElementsByTagNameNS("*","row")).slice(2).map(row=>{const t=row.getElementsByTagNameNS("*","t")[0];const v=row.getElementsByTagNameNS("*","v")[0];return (t?.textContent||v?.textContent||"").trim()}).filter(Boolean)}
+
+    async function uploadComplainants(event){
+      const file = event.target.files?.[0]; if(!file) return;
+      let names = [];
+      if(file.name.toLowerCase().endsWith(".xlsx")){
+        const files = await unzipXlsx(await file.arrayBuffer());
+        names = namesFromSheetXml(files["xl/worksheets/sheet1.xml"] || "");
+      } else {
+        const text = await file.text();
+        const xml = new DOMParser().parseFromString(text, "text/xml");
+        names = Array.from(xml.getElementsByTagNameNS("*", "Data")).map(d => d.textContent.trim()).filter(Boolean);
+        names = names.filter(n => !["name","Complainant Name"].includes(n));
+        if(!names.length) names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      }
+      const res = await fetch(`${API}/complainants/bulk`, { method:"POST", headers:{ "Content-Type":"application/json", "Authorization":`Bearer ${token}` }, body: JSON.stringify(names.map(name => ({name}))) });
+      const data = await res.json().catch(()=>({}));
+      q("#msg").textContent = res.ok ? `${data.added || 0} complainants added.` : "Unable to upload complainants.";
+      event.target.value = "";
+      await loadComplainants();
+    }
+
+    loadLaws();
+    loadComplainants();
+  </script>
+  <script src="/static/js/acjm-side-nav.js?v=20260928"></script>
+</body>
+</html>

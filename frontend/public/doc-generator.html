@@ -1,0 +1,2199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Document Generator</title>
+  <link rel="stylesheet" href="/static/css/main.css" />
+  <style>
+    @font-face { font-family:"Lohit Gujarati"; src:url("/fonts/Lohit-Gujarati.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap; }
+    @font-face { font-family:"Tiro Devanagari Hindi"; src:url("/fonts/TiroDevanagariHindi-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap; }
+    @page { size: A4; margin: 12mm; }
+    .doc-step { display: none; }
+    .doc-step.active { display: block; }
+    .hint { color: #475569; }
+    .doc-card { max-width:980px; }
+    .doc-fields { grid-gap:14px; align-items:center; display:grid; gap:14px; grid-template-columns:220px 1fr; }
+    .doc-fields label { color:#374151; font-weight:600; }
+    .doc-fields input, .doc-fields select, .doc-fields textarea { background:#fff; border:1px solid #d4c8b0; border-radius:4px; font-family:inherit; font-size:15px; padding:10px 12px; width:100%; }
+    .doc-fields input.field-error, .doc-fields textarea.field-error { border-color:#dc2626; box-shadow:0 0 0 1px #dc2626 inset; }
+    .doc-fields textarea { min-height:80px; }
+    .case-input-wrap, .date-wrap, .voice-wrap { align-items:center; display:flex; gap:8px; }
+    .case-prefix { background:#f8f3ea; border:1px solid #d4c8b0; border-radius:4px; color:#1f2937; padding:10px 12px; white-space:nowrap; }
+    .mic-btn { align-items:center; background:#dc2626; border-radius:999px; color:#fff; display:inline-flex; height:42px; justify-content:center; min-width:42px; padding:0; width:42px; }
+    .mic-btn::before { background:#fff; content:""; display:block; height:24px; width:24px; -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z'/%3E%3Cpath d='M19 10v2a7 7 0 0 1-14 0v-2'/%3E%3Cpath d='M12 19v3'/%3E%3Cpath d='M8 22h8'/%3E%3C/svg%3E") center/contain no-repeat; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z'/%3E%3Cpath d='M19 10v2a7 7 0 0 1-14 0v-2'/%3E%3Cpath d='M12 19v3'/%3E%3Cpath d='M8 22h8'/%3E%3C/svg%3E") center/contain no-repeat; }
+    .mic-btn.listening { background:#16a34a; }
+    .voice-status { color:#475569; font-size:13px; min-width:120px; }
+    .voice-status.listening { animation: blink 1s linear infinite; color:#16a34a; font-weight:700; }
+    @keyframes blink { 50% { opacity:.25; } }
+    .surety-progress { color:#475569; font-weight:600; margin:6px 0 12px; }
+    .pager-row { display:flex; justify-content:space-between; gap:12px; grid-column:1 / -1; margin-top:10px; }
+    .combo { position:relative; }
+    .combo-control { align-items:center; background:#fff; border:1px solid #d4c8b0; border-radius:4px; cursor:pointer; display:flex; justify-content:space-between; padding:10px 12px; }
+    .combo-control.field-error { border-color:#dc2626; box-shadow:0 0 0 1px #dc2626 inset; }
+    .combo-panel { background:#fff; border:1px solid #777; box-shadow:0 8px 18px rgba(0,0,0,.12); display:none; left:0; padding:10px; position:absolute; right:0; top:calc(100% + 4px); z-index:20; }
+    .combo.open .combo-panel { display:block; }
+    .combo-search { box-sizing:border-box; margin-bottom:10px; width:100%; }
+    .combo-options { max-height:190px; overflow:auto; }
+    .combo-option { cursor:pointer; padding:7px 8px; }
+    .combo-option:hover { background:#eef2ff; }
+    .legal-doc { width: 185mm; min-height: 272mm; margin: 0 auto 16px; background:#fff; color:#111; padding: 8mm 10mm; box-sizing:border-box; font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif; font-size: 17px; line-height:1.55; text-align:justify; text-justify:inter-word; }
+    .legal-doc.gu { font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif; }
+    .legal-doc h1 { font-size:21px; text-align:center; margin:0 0 12px; }
+    .legal-doc h2 { font-size:18px; text-align:center; margin:10px 0; text-decoration:underline; }
+    .legal-doc p { text-align:justify; text-justify:inter-word; margin: 8px 0; }
+    .court-head { text-align:center; font-weight:bold; font-size:18px; }
+    .court-title { text-align:center !important; font-weight:bold; font-size:17px; }
+    .details-grid { display:grid; grid-template-columns: 42mm 1fr; gap:4px 8px; margin:10px 0; }
+    .case-row, .signature-row { display:flex; justify-content:space-between; gap:20px; }
+    .case-no-right { margin:8px 0; text-align:right; }
+    .party-center { margin:12px 0; text-align:center; }
+    .signature-line { border-top:1px solid #000; min-width:210px; padding-top:5px; text-align:center; }
+    .esign-keywords { min-width:250px; text-align:center; }
+    .esign-keyword { font-weight:700; white-space:nowrap; }
+    .esign-gap { height:24mm; }
+    .scan-page { width: 185mm; height: 272mm; margin: 0 auto 16px; position: relative; background:#fff; overflow:hidden; page-break-after: always; }
+    .scan-page img { position:absolute; inset:0; width:100%; height:100%; object-fit:fill; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .scan-value { position:absolute; font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif; font-size:14px; font-weight:600; color:#111; white-space:nowrap; }
+    .bond-page { page-break-before: always; }
+    .section-title { background:#1e3a8a; border-radius:4px; color:#fff; margin:24px 0 16px; padding:10px 16px; }
+    .bulk-tools-panel { align-items:flex-end; border-top:1px dashed #d4c8b0; display:flex; gap:10px; justify-content:flex-end; margin-top:16px; padding-top:14px; }
+    .bulk-tools-panel .hint { line-height:1.35; margin-right:auto; max-width:520px; text-align:left; }
+    .condition-role-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); margin:16px 0; }
+    .condition-role-btn { background:#fff; border:1px solid #d4c8b0; border-radius:6px; color:#1e3a8a; cursor:pointer; font-family:inherit; font-size:16px; font-weight:700; padding:16px; }
+    .condition-role-btn:hover { background:#eef2ff; border-color:#1e3a8a; }
+    .condition-card { align-items:start; display:grid; gap:10px; grid-template-columns:32px 1fr; margin-bottom:12px; }
+    .condition-card input { margin-top:5px; }
+    .condition-add-box { border-top:1px dashed #d4c8b0; grid-column:1 / -1; margin-top:12px; padding-top:12px; }
+    .translation-annex { border-top:2px solid #111; margin-top:16mm; min-height:240mm; page-break-before:always; padding-top:10mm; }
+    .translation-annex h2 { text-align:center; }
+    .translation-annex .translation-box { border:1px dashed #777; margin-top:12mm; min-height:120mm; padding:8mm; }
+    .translation-annex .translated-line { margin:0 0 8px; text-align:justify; }
+    .legal-doc, .legal-doc * { font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif !important; }
+    .legal-doc { font-size:17px !important; line-height:1.55 !important; overflow:visible !important; text-align:justify; text-justify:inter-word; }
+    .legal-doc.gu, .legal-doc.gu * { font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif !important; }
+    .legal-doc h1, .legal-doc h2, .legal-doc h3, .legal-doc .court-head, .legal-doc .case-row, .legal-doc .signature-row { break-inside:avoid !important; page-break-inside:avoid !important; }
+    .legal-doc table { break-inside:auto !important; page-break-inside:auto !important; }
+    .mother-modal-backdrop { align-items:center; background:rgba(15,23,42,.52); display:flex; inset:0; justify-content:center; position:fixed; z-index:9999; }
+    .mother-modal { background:#fff; border-radius:8px; box-shadow:0 24px 60px rgba(15,23,42,.35); max-width:520px; padding:22px; width:calc(100% - 32px); }
+    .mother-modal h2 { color:#0f2f7f; font-size:21px; margin:0 0 12px; }
+    .mother-modal select { background:#fff; border:1px solid #d4c8b0; border-radius:4px; font-family:inherit; margin-top:8px; padding:10px 12px; width:100%; }
+    .mother-modal .actions { display:flex; justify-content:flex-end; margin-top:18px; }
+    .mother-modal .error { color:#dc2626; font-size:13px; margin-top:8px; }
+    .global-voice-bar { align-items:center; background:#fff; border:1px solid #d4c8b0; border-radius:999px; bottom:86px; box-shadow:0 10px 24px rgba(15,23,42,.18); display:none; gap:8px; padding:8px 10px; position:fixed; right:24px; z-index:100; }
+    .global-voice-bar.ready { display:flex; }
+    .global-voice-bar .hint { display:none; }
+    .global-voice-bar .voice-status { min-width:auto; white-space:nowrap; }
+    .lang-card { min-width: 220px; }
+    @media print {
+      @page { size:A4; margin:14mm 14mm 16mm; }
+      body { background:#fff; }
+      .no-print, .topbar, .form-actions { display:none !important; }
+      .page { box-shadow:none; margin:0; max-width:none; padding:0; }
+      .doc-step { display:none !important; }
+      .doc-step.printing { display:block !important; }
+      .legal-doc, .legal-doc * { font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif!important; }
+      .legal-doc { border:0!important; box-shadow:none!important; margin:0!important; max-width:none!important; min-height:auto!important; overflow:visible!important; padding:0!important; width:auto!important; font-size:17px!important; line-height:1.55!important; text-align:justify!important; text-justify:inter-word!important; orphans:3; widows:3; }
+      .legal-doc.gu, .legal-doc.gu * { font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif!important; }
+      .legal-doc h1,.legal-doc h2,.legal-doc h3,.legal-doc .court-head,.legal-doc .case-row,.legal-doc .case-no-right,.legal-doc .party-center,.legal-doc .signature-row { break-inside:avoid; page-break-inside:avoid; }
+      .legal-doc table { break-inside:auto; page-break-inside:auto; }
+      .translation-annex, .translation-annex * { font-family:"Tiro Devanagari Hindi", "Lohit Gujarati", "Times New Roman", serif!important; }
+      .scan-page { margin:0 auto; page-break-after: always; }
+      .legal-doc:last-child, .scan-page:last-child { page-break-after:auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="topbar no-print">
+      <h2 id="top-title">Document Generator</h2>
+      <button class="btn btn-secondary" onclick="goMenu()">Back</button>
+    </div>
+    <div class="page doc-card">
+      <section id="lang-step" class="doc-step active" style="text-align:center">
+        <h1>Select Language</h1>
+        <div class="row" style="justify-content:center;margin-top:32px">
+          <button class="btn btn-orange role-btn lang-card" onclick="selectLang('gu')">ગુજરાતી</button>
+          <button class="btn btn-red role-btn lang-card" onclick="selectLang('en')">English</button>
+        </div>
+      </section>
+
+      <section id="form-step" class="doc-step">
+        <div class="row no-print" style="justify-content:space-between">
+          <h1 id="form-heading"></h1>
+          <button class="btn btn-secondary" onclick="showStep('lang-step')">Back to Language</button>
+        </div>
+        <p class="hint"><strong>Court:</strong> <span id="court-name"></span></p>
+        <div class="global-voice-bar no-print">
+          <span class="hint">Place cursor in any text field, then use mic. Case number and date fields are excluded.</span>
+          <button type="button" class="btn mic-btn" id="global-mic" onmousedown="event.preventDefault()" onclick="toggleFocusedVoice()" title="Voice typing" aria-label="Voice typing"></button>
+          <span class="voice-status" id="global-voice-status"></span>
+        </div>
+        <div class="section-title" id="section-title">Document Details</div>
+        <p id="surety-progress" class="surety-progress"></p>
+        <div class="doc-fields" id="form-grid"></div>
+        <p id="msg" class="error"></p>
+        <div id="form-actions" class="form-actions no-print">
+          <button class="btn btn-danger" onclick="resetDraft()">Reset / Start New</button>
+          <button id="preview-btn" class="btn btn-primary" onclick="previewDoc()">Preview</button>
+        </div>
+        <div id="bulk-tools" class="bulk-tools-panel no-print" style="display:none">
+          <span class="hint">For bulk generation of applications or pursis, use these Excel buttons. Please upload a fresh data file for every bulk generation so older entries are not generated again.</span>
+          <button class="btn btn-outline" onclick="downloadBulkTemplate()">Download Excel Template</button>
+          <button class="btn btn-primary" onclick="document.getElementById('bulk-upload').click()">Upload Excel</button>
+          <input id="bulk-upload" type="file" accept=".xls,.xml,.xlsx" style="display:none" onchange="uploadBulkExcel(event)" />
+        </div>
+        <div id="bulk-desk" class="no-print" style="display:none;border:1px solid #e2d8c8;border-radius:6px;margin:12px 0;padding:12px">
+          <strong>Bulk Generation Desk</strong>
+          <p class="hint">Uploaded rows will appear here. Select one entry to inspect it, or generate all entries together. Each bulk run should use a newly prepared file so older entries are not generated again.</p>
+          <select id="bulk-row-select" style="width:100%;padding:10px;margin-bottom:10px"></select>
+          <div id="bulk-row-preview" class="hint"></div>
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="generateBulkRows()">Generate Uploaded List</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="condition-step" class="doc-step">
+        <div class="row no-print" style="justify-content:space-between">
+          <h1 id="condition-heading">Bond Conditions</h1>
+          <button class="btn btn-secondary" onclick="showStep('form-step')">Back to Entry</button>
+        </div>
+        <p class="hint" id="condition-help"></p>
+        <div id="condition-list" class="doc-fields"></div>
+        <div class="form-actions no-print">
+          <button class="btn btn-outline" id="add-condition-btn" onclick="addCustomCondition()">Add Condition</button>
+          <button class="btn btn-primary" onclick="advanceConditionStep()">Continue</button>
+        </div>
+      </section>
+
+      <section id="preview-step" class="doc-step">
+        <div id="mother-tongue-panel" class="no-print" style="display:none;background:#f8f3ea;border:1px solid #d4c8b0;border-radius:6px;margin:0 0 14px;padding:12px">
+          <button class="btn btn-outline" type="button" onclick="showTranslationTargetPrompt()">Generate Translated Copy</button>
+          <span class="hint" style="margin-left:10px">First verify the Court Copy. Translation is appended only after this button is used.</span>
+          <div id="translation-status" class="hint" style="margin-top:8px"></div>
+        </div>
+        <div id="print-wrap"></div>
+        <div class="form-actions no-print">
+          <button class="btn btn-secondary" onclick="showStep('form-step')">Edit</button>
+          <button class="btn btn-primary" onclick="saveAndPrint()">Save & Print / PDF</button>
+          <button class="btn btn-outline" onclick="digitallySignCurrent()">Digitally Sign</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="/static/js/acjm-translation-engine.js?v=20260624-translation-engine"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const kind = params.get("kind") || "application";
+    const API = location.origin + "/api";
+    const selectedCourtId = localStorage.getItem("selected_court_id") || "";
+    const selectedCourt = JSON.parse(localStorage.getItem("selected_court") || "null");
+    let lang = params.get("lang") || "";
+    let cases = [];
+    let form = {};
+    let laws = [];
+    let complainants = [];
+    let activeVoice = null;
+    let lastFocusedVoiceTarget = null;
+    let suretyPage = 0;
+    let bulkRows = [];
+    let activeConditionRole = "";
+    let conditionDoneRoles = [];
+
+    const baseFields = ["case_number","complainant_name","accused_name","producing_party","advocate_name","date"];
+    const motherTongues = [
+      {code:"en", name:"English", script:"Roman"},
+      {code:"gu", name:"Gujarati", script:"Gujarati Script"},
+      {code:"hi", name:"Hindi", script:"Devanagari"},
+      {code:"mr", name:"Marathi", script:"Devanagari"},
+      {code:"sa", name:"Sanskrit", script:"Devanagari"},
+      {code:"pa", name:"Punjabi", script:"Gurmukhi"},
+      {code:"bn", name:"Bengali", script:"Bengali Script"},
+      {code:"as", name:"Assamese", script:"Assamese Script"},
+      {code:"or", name:"Odia", script:"Odia Script"},
+      {code:"ta", name:"Tamil", script:"Tamil Script"},
+      {code:"te", name:"Telugu", script:"Telugu Script"},
+      {code:"kn", name:"Kannada", script:"Kannada Script"},
+      {code:"ml", name:"Malayalam", script:"Malayalam Script"},
+      {code:"mni", name:"Meitei (Manipuri)", script:"Meitei Mayek"}
+    ];
+    const defaultLaws = [
+      { english:"Sec. 138 of The Negotiable Instruments Act, 1881", gujarati:"કલમ. ૧૩૮ ધી નેગોશેબલ ઇન્સ્ટ્રુમેન્ટ અધિનિયમ, ૧૮૮૧" },
+      { english:"Sec. 25 of The Payment & Settlement Systems Act, 2007", gujarati:"કલમ ૨૫ ધી પેમેન્ટ અને સેટલમેન્ટ સીસ્ટમ અધિનિયમ, ૨૦૦૭" }
+    ];
+    const bondConditionOptions = [
+      { id:"c1", label:{ en:"Presence before Court on every date", gu:"દરેક તારીખે હાજરી" },
+        accused:{ en:"The accused shall remain regularly present before the Court while complying with the conditions stated in the bond executed before the Court.", gu:"આરોપીએ અદાલત સમક્ષ અમલ કરેલ બોન્ડ માં જણાવેલ શરતો નુ પાલન કરતા અદાલત સમક્ષ નિયમીત હાજર થવુ." },
+        surety:{ en:"The accused shall remain regularly present before the Court while complying with the conditions stated in the bond executed before the Court.", gu:"આરોપીએ અદાલત સમક્ષ અમલ કરેલ બોન્ડ માં જણાવેલ શરતો નુ પાલન કરતા અદાલત સમક્ષ નિયમીત હાજર થવુ." },
+        convict:{ en:"We the convict have declared our present and original true address before this Court by separate affidavit.", gu:"અમો દોષિતએ અમારૂ હાલનુ તેમજ મૂળ સાચું સરનામું અલગ થી એફિડેવિટ થી અત્રે ના ન્યાયાલય સમક્ષ જાહેર કરેલ છે." },
+        convictSurety:{ en:"The convict has declared his present and original true address before this Court by his separate affidavit.", gu:"દોષિતએ તેમનું હાલનુ તેમજ મૂળ સાચું સરનામું અલગ થી પોતાના એફિડેવિટ થી અત્રે ના ન્યાયાલય સમક્ષ જાહેર કરેલ છે." } },
+      { id:"c2", label:{ en:"Do not commit similar offence", gu:"સમાન ગુનો ન કરવો" },
+        accused:{ en:"The accused shall not commit such type of offence or get involved in such type of offence.", gu:"આરોપીએ આવા પ્રકારનો ગુનો કરવો નહી અથવા આવા પ્રકારના ગુનામાં સંડોવાવુ નહી." },
+        surety:{ en:"The accused shall not commit such type of offence or get involved in such type of offence.", gu:"આરોપીએ આવા પ્રકારનો ગુનો કરવો નહી અથવા આવા પ્રકારના ગુનામાં સંડોવાવુ નહી." },
+        convict:{ en:"We the convict do not hold any passport and have declared the same before this Court by separate affidavit / the passport held by us has been produced before this Court today.", gu:"અમો દોષિત કોઈ પણ પાસપોર્ટ ધરાવતા નથી અને તે અંગે નું અલગ થી એફિડેવિટ થી અત્રે ના ન્યાયાલય સમક્ષ જાહેર કરેલ છે. / અમો દોષિત જે પાસપોર્ટ ધરાવીએ છે તે આજ રોજ અમો અત્રે ના ન્યાયાલય સમક્ષ રજૂ કરેલ છે." },
+        convictSurety:{ en:"The convict does not hold any passport and has declared the same before this Court by his affidavit / the passport held by the convict has been produced before this Court today.", gu:"દોષિત કોઈ પણ પાસપોર્ટ ધરાવતા નથી અને તે અંગે નું અલગ થી પોતાનું એફિડેવિટ થી અત્રે ના ન્યાયાલય સમક્ષ જાહેર કરેલ છે. / દોષિત જે પાસપોર્ટ ધરાવે છે તે આજ રોજ અત્રે ના ન્યાયાલય સમક્ષ રજૂ કરેલ છે." } },
+      { id:"c3", label:{ en:"No inducement or threat", gu:"ધમકી કે પ્રલોભન નહિ" },
+        accused:{ en:"The accused shall not directly or indirectly give or cause to be given any inducement or threat to any person acquainted with the facts of the present case / witness so as to prevent such person from disclosing facts before the police officer or the Court.", gu:"આરોપીએ પ્રત્યક્ષ અથવા પરોક્ષ રીતે હાલના કામના માહીતગાર વ્યક્તિ / સાક્ષી ઓને પોલીસ અધિકારી અથવા અદાલત સમક્ષ તેવી હકિકતો જાહેર કરે થી અટકાવવા માટે - પ્રલોભન અથવા, ધમકી આપવી કે અપાવવી નહી." },
+        surety:{ en:"The accused shall not directly or indirectly give or cause to be given any inducement or threat to any person acquainted with the facts of the present case / witness so as to prevent such person from disclosing facts before the police officer or the Court.", gu:"આરોપીએ પ્રત્યક્ષ અથવા પરોક્ષ રીતે હાલના કામના માહીતગાર વ્યક્તિ / સાક્ષી ઓને પોલીસ અધિકારી અથવા અદાલત સમક્ષ તેવી હકિકતો જાહેર કરે થી અટકાવવા માટે - પ્રલોભન અથવા, ધમકી આપવી કે અપાવવી નહી." },
+        convict:{ en:"The mobile number permanently used by us the convict is __ACCUSED_CONTACT__. If we change this mobile number, we shall give prior written intimation to this Court.", gu:"અમો દોષિત કાયમી ધોરણે ઉપયોગ્ય કરતા હોય તેવો મોબાઈલ નં __ACCUSED_CONTACT__ નો આવેલો છે. અમો જો આ મોબાઇલ નંબર બદલશુ તો તેની પુર્વ જાણ અમોને અત્રેની અદાલતને લેખીત સ્વરૂપમાં કરવાની રહેશે." },
+        convictSurety:{ en:"The mobile number permanently used by the convict is __ACCUSED_CONTACT__. If the convict changes this mobile number, prior written intimation shall be given to this Court.", gu:"દોષિત કાયમી ધોરણે ઉપયોગ્ય કરતા હોય તેવો મોબાઈલ નં __ACCUSED_CONTACT__ નો આવેલો છે. જો આ મોબાઇલ નંબર તેઓ બદલશે તો તેની પુર્વ જાણ તેઓ ને અત્રેની અદાલતને લેખીત સ્વરૂપમાં કરવાની રહેશે." } },
+      { id:"c4", label:{ en:"Cooperate with investigation", gu:"તપાસમાં સહકાર" },
+        accused:{ en:"The accused shall cooperate in the investigation and shall remain present before the investigating officer whenever and wherever called during investigation of the present matter.", gu:"તપાસ માં સાથ સહકાર આપવું, તેમજ તપાસ કરનાર અધિકારી હાલના કામે તપાસ દરમિયાન જ્યારે અને જ્યા બોલાવશે ત્યારે અને ત્યા હાજર થવું." },
+        surety:{ en:"The accused shall cooperate in the investigation and shall remain present before the investigating officer whenever and wherever called during investigation of the present matter.", gu:"તપાસ માં સાથ સહકાર આપવું, તેમજ તપાસ કરનાર અધિકારી હાલના કામે તપાસ દરમિયાન જ્યારે અને જ્યા બોલાવશે ત્યારે અને ત્યા હાજર થવું." },
+        convict:{ en:"We the convict assure that we shall remain present before this Court or any other concerned office whenever called.", gu:"અમો દોષિત અત્રેની અથવા અન્ય જે કોઈ સંબંધિત કચેરી બોલાવે તો તેની સમક્ષ ઉપસ્થિત થવા ખાત્રી આપી એ છે." },
+        convictSurety:{ en:"The convict assures that he shall remain present before this Court or any other concerned office whenever called.", gu:"દોષિત અત્રેની અથવા અન્ય જે કોઈ સંબંધિત કચેરી બોલાવે તો તેની સમક્ષ ઉપસ્થિત થવા ખાત્રી આપે એ છે." } },
+      { id:"c5", label:{ en:"Mobile number intimation", gu:"મોબાઇલ નંબરની જાણ" },
+        accused:{ en:"The mobile number permanently used by us the accused is __ACCUSED_CONTACT__. If we change this mobile number, we shall give prior written intimation to this Court.", gu:"અમો આરોપીનો અમો કાયમી ધોરણે ઉપયોગ્ય કરતા હોય તેવો મોબાઈલ નં __ACCUSED_CONTACT__ નો આવેલો છે. અમો જો આ મોબાઇલ નંબર બદલશુ તો તેની પુર્વ જાણ અમોને અત્રેની અદાલતને લેખીત સ્વરૂપમાં કરવાની રહેશે." },
+        surety:{ en:"The mobile number permanently used by the accused is __ACCUSED_CONTACT__. If the accused changes this mobile number, prior written intimation shall be given to this Court.", gu:"આરોપી કાયમી ધોરણે ઉપયોગ્ય કરતા હોય તેવો મોબાઈલ નં __ACCUSED_CONTACT__ નો આવેલો છે. આરોપી જો આ મોબાઇલ નંબર બદલશે તો તેની પુર્વ જાણ તેઓને અત્રેની અદાલતને લેખીત સ્વરૂપમાં કરવાની રહેશે." },
+        convict:{ en:"If we the convict breach any of the above conditions, the bail granted to us shall be liable to be cancelled automatically and in such circumstances we assure to remain present before the Court.", gu:"જો અમો દોષિત ઉપરોક્ત પૈકી કોઇ પણ શરત નું ભંગ કરી એ તો અમો ને આપવા માં આવેલ જામીન આપો આપ રદ થવા પાત્ર રહેશે અને તેવા સંજોગો માં અમો ન્યાયાલય સમક્ષ ઉપસ્થિત રહેવા ખાત્રી આપી એ છે." },
+        convictSurety:{ en:"If the convict breaches any of the above conditions, the bail granted to him shall be liable to be cancelled automatically and in such circumstances we assure to remain present before the Court.", gu:"જો દોષિત ઉપરોક્ત પૈકી કોઇ પણ શરત નું ભંગ કરી એ તો તેઓ ને આપવા માં આવેલ જામીન આપો આપ રદ થવા પાત્ર રહેશે અને તેવા સંજોગો માં અમો ન્યાયાલય સમક્ષ ઉપસ્થિત રહેવા ખાત્રી આપી એ છે." } },
+      { id:"c6", label:{ en:"Do not leave India", gu:"ભારત બહાર ન જવું" },
+        accused:{ en:"We shall not leave the territory of India without prior intimation to the Court.", gu:"અદાલતને પુર્વ જાણ સિવાય અમો “ભારત” દેશ ની હદ છોડીશુ નહી." },
+        surety:{ en:"The accused shall not leave the territory of India without prior intimation to the Court.", gu:"અદાલતને પુર્વ જાણ સિવાય આરોપી “ભારત” દેશ ની હદ છોડીશે નહી." },
+        convict:{ en:"", gu:"" },
+        convictSurety:{ en:"", gu:"" } }
+    ];
+    const stages = {
+      en:["Process","Evidence of Complainant","Evidence of Accused","Further Statement","Arguments","Judgement"],
+      gu:["પ્રોસેસ","ફરિયાદીનો પુરાવો","આરોપીનો પુરાવો","વિશેષ નિવેદન","દલીલો","ચુકાદો"]
+    };
+    const parties = {
+      en:["Complainant","Accused","Witness","Third Party","Custom"],
+      gu:["ફરિયાદી","આરોપી","સાક્ષી","ત્રીજો પક્ષ","કસ્ટમ"]
+    };
+    const yesNo = { en:["Yes","No"], gu:["હા","ના"] };
+    const residenceTypes = { en:["Owned","Rented"], gu:["માલિકીનું","ભાડાનું"] };
+    const identityProofs = {
+      en:["Aadhaar Card","PAN Card","Election Card","Voter Card","Driving Licence","Passport"],
+      gu:["આધાર કાર્ડ","પાન કાર્ડ","ચુટણી કાર્ડ","મતદાન કાર્ડ","ડ્રાયવિંગ લાઇસન્સ","પાસપોર્ટ"]
+    };
+    const solvencyProofs = {
+      en:["Revenue record of property","Property tax bill","Electricity bill of property","Bank pass book","Income tax returns"],
+      gu:["મિલક્ત નો મહેસુલી ઉતારો","મિલક્ત નુ વેરા બિલ","મિલક્ત નુ લાઇટ બિલ","બેંક પાસ બુક","આવક વેરા ના રિટર્ન"]
+    };
+    const otherProofs = {
+      en:["Rent receipt of residence","Business proof"],
+      gu:["રહેઠાણ ના ભાડા ની રસીદ","વ્યવસાય નો પુરાવો"]
+    };
+    const labels = {
+      en: {
+        application:"Application", pursis:"Pursis", surety:"Surety / Bond", choose_type:"Nature of Document",
+        select_case:"Select Existing Case", case_number:"Case Number", complainant_name:"Complainant Name", accused_name:"Accused Name", accused_address:"Accused Address", accused_contact:"Accused Contact Number", law_selection:"Law / Offence",
+        applicant_name:"Applicant / Producing Party Name", applicant_role:"Applicant Role", producing_party:"Producing Party", custom_party:"Custom Producing Party", advocate_name:"Advocate Name", date:"Date",
+        stage:"Case Stage", reason:"Reason", special_reason:"Special Reason", amount:"Amount", amount_words:"Amount in Words", body:"Additional Facts / Prayer", subject:"Subject", prayer:"Prayer / Request", further_disclosure:"Further Disclosure", additional_conditions:"Additional Conditions",
+        surety_name:"Surety Name", surety_parent:"Father / Husband Name of Surety", surety_age:"Surety Age", surety_occupation:"Surety Occupation",
+        surety_address:"Surety Address", surety_mobile:"Surety Mobile No.", surety_relation:"Relation with Accused", surety_property:"Immovable Property Details",
+        surety_bank:"Bank Account Details", surety_solvency:"Solvency Amount", police_station:"Police Station", cr_number:"Police C.R. No.", offence_section:"Offence Section",
+        bond_amount:"Bond Amount", bond_amount_words:"Bond Amount in Words", bail_order_date:"Date of Bail Order",
+        residence_years:"Since How Many Years Residing at This Address", residence_type:"Residence Type", residence_rent:"Monthly Rent of Residence", residence_rent_receipt:"Rent Receipt in Surety Name?",
+        business_engaged:"Is Surety Engaged in Business?", business_name:"Name of Business", business_address:"Business Address", business_nature:"Nature of Business", business_share:"Surety Share / Ownership in Business", business_place_type:"Business Premises Type", business_rent:"Monthly Rent of Business Premises", business_rent_receipt:"Business Rent Receipt in Surety Name?",
+        service_engaged:"Is Surety in Service?", employer_name:"Employer Name", employer_address:"Office Address", service_salary:"Monthly Salary with Allowances", provident_fund:"Provident Fund Amount",
+        property_value:"Present Market Value of Property", property_share:"Surety Share in Property", property_charge:"Is Property under Charge / Encumbrance?", property_charge_details:"Charge / Encumbrance Details",
+        income_tax_details:"Last Three Years Income Tax Return Details", bank_balance:"Total Amount in Bank Accounts",
+        accused_known_since:"Since How Long Accused Knows Surety", surety_relation_detail:"How Accused is Known to Surety", prior_surety:"Has Surety Acted as Surety for Any Other Person?", prior_surety_details:"Prior Surety Details", surety_forfeited:"Was Surety Forfeited Any Time?", forfeiture_details:"Forfeiture Details", surety_application_rejected:"Was Any Surety Application Rejected Earlier?", rejection_details:"Rejected Application Details",
+        identity_proof:"Identity Proof", solvency_proof:"Solvency Proof", other_proof:"Other Proof"
+      },
+      gu: {
+        application:"અરજી", pursis:"પુરસીસ", surety:"જામીન / બોન્ડ", choose_type:"દસ્તાવેજનો પ્રકાર",
+        select_case:"હાલનો કેસ પસંદ કરો", case_number:"કેસ નંબર", complainant_name:"ફરિયાદીનું નામ", accused_name:"આરોપીનું નામ", accused_address:"આરોપીનું સરનામું", accused_contact:"આરોપીનો સંપર્ક નંબર", law_selection:"કાયદો / ગુનાની કલમ",
+        applicant_name:"અરજદાર / રજૂ કરનારનું નામ", applicant_role:"અરજદારની ભૂમિકા", producing_party:"રજૂ કરનાર પક્ષ", custom_party:"કસ્ટમ રજૂ કરનાર પક્ષ", advocate_name:"વકીલનું નામ", date:"તારીખ",
+        stage:"કેસનો તબક્કો", reason:"કારણ", special_reason:"વિશેષ કારણ", amount:"રકમ", amount_words:"રકમ શબ્દોમાં", body:"વધારાની હકીકત / પ્રાર્થના", subject:"વિષય", prayer:"પ્રાર્થના / વિનંતી", further_disclosure:"વધારાની જાહેરાત", additional_conditions:"વધારાની શરતો",
+        surety_name:"જામીનદારનું નામ", surety_parent:"જામીનદારના પિતા / પતિનું નામ", surety_age:"જામીનદારની ઉંમર", surety_occupation:"જામીનદારનો ધંધો",
+        surety_address:"જામીનદારનું સરનામું", surety_mobile:"જામીનદારનો મોબાઇલ નંબર", surety_relation:"આરોપી સાથેનો સંબંધ", surety_property:"સ્થાવર મિલકતની વિગત",
+        surety_bank:"બેંક ખાતાની વિગત", surety_solvency:"સોલ્વન્સી રકમ", police_station:"પોલીસ સ્ટેશન", cr_number:"પો. ગુ. ર. નં.", offence_section:"ગુનાની કલમ",
+        bond_amount:"બોન્ડની રકમ", bond_amount_words:"બોન્ડની રકમ શબ્દોમાં", bail_order_date:"જામીન હુકમની તારીખ",
+        residence_years:"ઉપરના સરનામે કેટલા વર્ષથી રહે છે", residence_type:"રહેઠાણનો પ્રકાર", residence_rent:"રહેઠાણનું માસિક ભાડું", residence_rent_receipt:"ભાડાની રસીદ જામીનદારના નામે છે?", 
+        business_engaged:"જામીનદાર ધંધો / વેપાર કરે છે?", business_name:"ધંધાનું નામ", business_address:"ધંધાના સ્થળનું સરનામું", business_nature:"ધંધાનું સ્વરૂપ", business_share:"ધંધામાં જામીનદારનો હિસ્સો", business_place_type:"ધંધાના સ્થળનો પ્રકાર", business_rent:"ધંધાના સ્થળનું માસિક ભાડું", business_rent_receipt:"ધંધાના ભાડાની પાવતી જામીનદારના નામે છે?",
+        service_engaged:"જામીનદાર નોકરી કરે છે?", employer_name:"નોકરી આપનારનું નામ", employer_address:"નોકરીની જગ્યાનું સરનામું", service_salary:"માસિક પગાર અને ભથ્થું", provident_fund:"પ્રોવીડન્ટ ફંડની રકમ",
+        property_value:"મિલકતની હાલ બજાર કિંમત", property_share:"મિલકતમાં જામીનદારનો ભાગ / હિત", property_charge:"મિલકત ઉપર બોજો / હિત છે?", property_charge_details:"બોજા / હિતની વિગત",
+        income_tax_details:"છેલ્લા ત્રણ વર્ષના આવકવેરા રિટર્નની વિગત", bank_balance:"બેંક ખાતાઓમાં કુલ જમા રકમ",
+        accused_known_since:"આરોપી જામીનદારને કેટલા સમયથી ઓળખે છે", surety_relation_detail:"આરોપી જામીનદારને કેવી રીતે ઓળખે છે", prior_surety:"જામીનદાર બીજા કોઇ વ્યક્તિના જામીન રહેલા છે?", prior_surety_details:"અગાઉના જામીનની વિગત", surety_forfeited:"જામીનગીરી કોઇ વખત વસૂલ થયેલ છે?", forfeiture_details:"વસૂલાતની વિગત", surety_application_rejected:"અગાઉ જામીન અરજી રદ થયેલ છે?", rejection_details:"રદ થયેલ અરજીની વિગત",
+        identity_proof:"ઓળખ માટેનો પુરાવો", solvency_proof:"સધ્ધરતા માટેનો પુરાવો", other_proof:"અન્ય પુરાવો"
+      }
+    };
+
+    const templates = {
+      application: [
+        { id:"adjournment", en:"Adjournment Application", gu:"મુદત અરજી", fields:[...baseFields,"stage","reason","special_reason"] },
+        { id:"exemption", en:"Exemption Application", gu:"હાજરીમાંથી મુક્તિ અરજી", fields:[...baseFields,"stage","reason","special_reason"] },
+        { id:"fine_deposit", en:"Application to Deposit Penalty / Fine", gu:"દંડ / ફાઇનની રકમ જમા કરાવવા અંગેની અરજી", fields:[...baseFields,"amount","amount_words","special_reason"] },
+        { id:"dlsa_cost", en:"Application to Deposit Cost before DLSA", gu:"ડી.એલ.એસ.એ. સમક્ષ ખર્ચની રકમ જમા કરાવવા અંગેની અરજી", fields:[...baseFields,"amount","amount_words","special_reason"] },
+        { id:"surety_deposit", en:"Application to Deposit Surety Amount", gu:"જામીનગીરીની રકમ જમા કરાવવા અંગેની અરજી", fields:[...baseFields,"amount","amount_words","special_reason"] },
+        { id:"other_deposit", en:"Application to Deposit Other Amount", gu:"અન્ય રકમ જમા કરાવવા અંગેની અરજી", fields:[...baseFields,"amount","amount_words","special_reason"] },
+        { id:"custom_application", en:"Custom Application", gu:"કસ્ટમ અરજી", fields:[...baseFields,"subject","body"] }
+      ],
+      pursis: [
+        { id:"withdrawal", en:"Withdrawal Pursis", gu:"ફરિયાદ પાછી ખેંચવાની પુરસીસ", fields:[...baseFields,"law_selection","body"] },
+        { id:"lok_adalat", en:"Advance Withdrawal Pursis - Lok Adalat", gu:"લોક અદાલત માટે એડવાન્સ વિડ્રોઅલ પુરસીસ", fields:[...baseFields,"law_selection","body"] },
+        { id:"police_bail", en:"Bail & Bond at Police Station Pursis", gu:"પોલીસ સ્ટેશન ખાતે જામીન આપેલ હોવા અંગેની પુરસીસ", fields:[...baseFields,"police_station"] },
+        { id:"case_papers", en:"Accused Declaration regarding Order, Case Papers and Surety", gu:"હુકમ, કેસ પેપર્સ અને જામીન અંગે આરોપીની જાહેરાત પુરસીસ", fields:[...baseFields,"body"] },
+        { id:"payment_declaration", en:"Declaration regarding Payment of Amount", gu:"રકમની ચુકવણી અંગેની જાહેરાત પુરસીસ", fields:[...baseFields,"amount","amount_words","body"] },
+        { id:"custom_pursis", en:"Custom Pursis", gu:"કસ્ટમ પુરસીસ", fields:[...baseFields,"subject","body"] }
+      ],
+      surety: [
+        { id:"surety_conditions", en:"Affidavit, Certificate & Bond with condition", gu:"સોગંદનામું, પ્રમાણપત્ર અને શરતો સાથે નું બોન્ડ", fields:[...baseFields,"police_station","cr_number","accused_address","accused_contact","law_selection","bail_order_date","surety_name","surety_parent","surety_age","surety_occupation","surety_address","surety_mobile","residence_years","residence_type","residence_rent","residence_rent_receipt","business_engaged","business_name","business_address","business_nature","business_share","business_place_type","business_rent","business_rent_receipt","service_engaged","employer_name","employer_address","service_salary","provident_fund","surety_property","property_value","property_share","property_charge","property_charge_details","income_tax_details","bank_balance","accused_known_since","surety_relation_detail","prior_surety","prior_surety_details","surety_forfeited","forfeiture_details","surety_application_rejected","rejection_details","identity_proof","solvency_proof","other_proof","bond_amount"] },
+        { id:"surety_no_conditions", en:"Affidavit, Certificate & Bond without conditions", gu:"સોગંદનામું, પ્રમાણપત્ર અને શરતો વગર બોન્ડ", fields:[...baseFields,"police_station","cr_number","accused_address","accused_contact","law_selection","bail_order_date","surety_name","surety_parent","surety_age","surety_occupation","surety_address","surety_mobile","residence_years","residence_type","residence_rent","residence_rent_receipt","business_engaged","business_name","business_address","business_nature","business_share","business_place_type","business_rent","business_rent_receipt","service_engaged","employer_name","employer_address","service_salary","provident_fund","surety_property","property_value","property_share","property_charge","property_charge_details","income_tax_details","bank_balance","accused_known_since","surety_relation_detail","prior_surety","prior_surety_details","surety_forfeited","forfeiture_details","surety_application_rejected","rejection_details","identity_proof","solvency_proof","other_proof","bond_amount"] },
+        { id:"surety_389", en:"Affidavit (389 After conviction), Certificate & Bond", gu:"સજા પછી કલમ ૩૮૯ હેઠળ - સોગંદનામું, પ્રમાણપત્ર અને બોન્ડ", fields:[...baseFields,"police_station","cr_number","accused_address","accused_contact","law_selection","bail_order_date","surety_name","surety_parent","surety_age","surety_occupation","surety_address","surety_mobile","residence_years","residence_type","residence_rent","residence_rent_receipt","business_engaged","business_name","business_address","business_nature","business_share","business_place_type","business_rent","business_rent_receipt","service_engaged","employer_name","employer_address","service_salary","provident_fund","surety_property","property_value","property_share","property_charge","property_charge_details","income_tax_details","bank_balance","accused_known_since","surety_relation_detail","prior_surety","prior_surety_details","surety_forfeited","forfeiture_details","surety_application_rejected","rejection_details","identity_proof","solvency_proof","other_proof","bond_amount"] },
+        { id:"personal_bond_accused", en:"Personal Bond of Accused", gu:"આરોપી નો જાત મુચરકો", fields:[...baseFields,"accused_address","accused_contact","police_station","cr_number","law_selection","bond_amount"] }
+      ]
+    };
+
+    const empty = {
+      document_type:"", case_number:"", complainant_name:"", accused_name:"", accused_address:"", accused_contact:"", applicant_name:"", applicant_role:"", producing_party:"", custom_party:"",
+      advocate_name:"", date:"", stage:"", reason:"", special_reason:"", amount:"", amount_words:"", body:"", subject:"", prayer:"", further_disclosure:"", additional_conditions:"", law_selection:"",
+      surety_name:"", surety_parent:"", surety_age:"", surety_occupation:"", surety_address:"", surety_mobile:"",
+      surety_relation:"", surety_property:"", surety_bank:"", surety_solvency:"", police_station:"", cr_number:"",
+      offence_section:"", bond_amount:"", bond_amount_words:"", bail_order_date:"",
+      residence_years:"", residence_type:"", residence_rent:"", residence_rent_receipt:"",
+      business_engaged:"", business_name:"", business_address:"", business_nature:"", business_share:"", business_place_type:"", business_rent:"", business_rent_receipt:"",
+      service_engaged:"", employer_name:"", employer_address:"", service_salary:"", provident_fund:"",
+      property_value:"", property_share:"", property_charge:"", property_charge_details:"", income_tax_details:"", bank_balance:"",
+      accused_known_since:"", surety_relation_detail:"", prior_surety:"", prior_surety_details:"", surety_forfeited:"", forfeiture_details:"", surety_application_rejected:"", rejection_details:"",
+      identity_proof:"", solvency_proof:"", other_proof:"", bond_conditions:[], custom_conditions:[], personal_bond_condition_mode:""
+    };
+
+    const samplePrefill = {
+      document_type:"",
+      case_number:"11/2026",
+      complainant_name:"RBL Bank Ltd",
+      accused_name:"Dineshbhai Govindbhai Chauhan",
+      accused_address:"40, Yadav Nagar, Vadodara, Gujarat",
+      accused_contact:"9876543210",
+      applicant_name:"Dineshbhai Govindbhai Chauhan",
+      producing_party:"Accused",
+      advocate_name:"S. P. Shah",
+      stage:"Process",
+      reason:"The applicant is unable to remain present before the Court on the date fixed due to unavoidable circumstances.",
+      special_reason:"The applicant undertakes to remain present on the next date.",
+      amount:"10000",
+      amount_words:"Ten Thousand Only",
+      body:"The present document is submitted for testing the generated output layout and font before final deployment.",
+      subject:"Testing document generation",
+      law_selection:"Sec. 138 of The Negotiable Instruments Act, 1881",
+      police_station:"Navrangpura Police Station",
+      cr_number:"112/2026",
+      bail_order_date:"24/06/2026",
+      surety_name:"Maheshbhai Rameshbhai Patel",
+      surety_parent:"Rameshbhai Patel",
+      surety_age:"45",
+      surety_occupation:"Business",
+      surety_address:"12, Shanti Society, Ahmedabad City",
+      surety_mobile:"9898989898",
+      residence_years:"10 years",
+      residence_type:"Owned",
+      residence_rent:"0",
+      residence_rent_receipt:"No",
+      business_engaged:"Yes",
+      business_name:"Patel Traders",
+      business_address:"Relief Road, Ahmedabad",
+      business_nature:"Trading business",
+      business_share:"Full ownership",
+      business_place_type:"Owned",
+      business_rent:"0",
+      business_rent_receipt:"No",
+      service_engaged:"No",
+      employer_name:"Not applicable",
+      employer_address:"Not applicable",
+      service_salary:"0",
+      provident_fund:"0",
+      surety_property:"Residential house situated at Ahmedabad City",
+      property_value:"5000000",
+      property_share:"Full share",
+      property_charge:"No",
+      property_charge_details:"No charge or encumbrance",
+      income_tax_details:"Income tax returns filed for last three years",
+      bank_balance:"250000",
+      accused_known_since:"5 years",
+      surety_relation_detail:"Friend",
+      prior_surety:"No",
+      prior_surety_details:"Not applicable",
+      surety_forfeited:"No",
+      forfeiture_details:"Not applicable",
+      surety_application_rejected:"No",
+      rejection_details:"Not applicable",
+      identity_proof:"Aadhaar Card",
+      solvency_proof:"Revenue record of property",
+      other_proof:"Electricity bill",
+      bond_amount:"10000"
+    };
+
+    const q = (s) => document.querySelector(s);
+    const L = () => labels[lang] || labels.en;
+    const today = () => new Date().toLocaleDateString("en-GB");
+    const draftUid = (() => { try { return (JSON.parse(localStorage.getItem("user") || "null") || {}).id || "guest"; } catch (e) { return "guest"; } })();
+    const draftKey = () => `doc_draft_${draftUid}_${kind}_${lang}`;
+    // Older drafts (saved before drafts were kept per user) move to this user.
+    try { ["gu","en","hi"].forEach(l => { const old = `doc_draft_${kind}_${l}`, cur = `doc_draft_${draftUid}_${kind}_${l}`; if (localStorage.getItem(old) && !localStorage.getItem(cur)) { localStorage.setItem(cur, localStorage.getItem(old)); localStorage.setItem(cur + "__at", String(Date.now())); } localStorage.removeItem(old); }); } catch (e) {}
+    function decodeMojibakeRun(run){
+      if(!/[àâ]/.test(run)) return run;
+      try {
+        const bytes = [];
+        for(const ch of run){
+          const code = ch.charCodeAt(0);
+          const cp1252 = {0x20AC:0x80,0x201A:0x82,0x0192:0x83,0x201E:0x84,0x2026:0x85,0x2020:0x86,0x2021:0x87,0x02C6:0x88,0x2030:0x89,0x0160:0x8A,0x2039:0x8B,0x0152:0x8C,0x017D:0x8E,0x2018:0x91,0x2019:0x92,0x201C:0x93,0x201D:0x94,0x2022:0x95,0x2013:0x96,0x2014:0x97,0x02DC:0x98,0x2122:0x99,0x0161:0x9A,0x203A:0x9B,0x0153:0x9C,0x017E:0x9E,0x0178:0x9F};
+          if(code <= 255) bytes.push(code);
+          else if(cp1252[code]) bytes.push(cp1252[code]);
+          else return run;
+        }
+        const decoded = new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+        return /[\u0A80-\u0AFF]/.test(decoded) || /[\u0900-\u097F]/.test(decoded) ? decoded : run;
+      } catch { return run; }
+    }
+
+    function fixMojibakeString(value){
+      const text = String(value ?? "");
+      if(!/[àâ]/.test(text)) return text;
+      return text.replace(/[À-ÿ\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178]+/g, decodeMojibakeRun);
+    }
+    const textOut = (v) => fixMojibakeString(v);
+    const esc = (v) => textOut(v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const val = (k) => esc(form[k] || "");
+    const selectedTemplate = () => templates[kind].find(t => t.id === form.document_type) || templates[kind][0];
+    const guDigits = (s) => String(s || "").replace(/[0-9]/g, d => "૦૧૨૩૪૫૬૭૮૯"[Number(d)]);
+    const dateForLang = (ddmmyyyy) => lang === "gu" ? guDigits(ddmmyyyy) : ddmmyyyy;
+    const lawText = () => val("law_selection") || val("offence_section");
+    const caseNumberDisplay = () => form.case_number ? `eCC/No./${form.case_number}` : "";
+    const toIsoDate = (ddmmyyyy) => {
+      const m = String(ddmmyyyy || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+    };
+    const fromIsoDate = (iso) => {
+      const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+    };
+
+    function goMenu(){ location.href = "/advocate/menu"; }
+    function repairVisibleText(root=document){
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while(walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach(node => {
+        const fixed = textOut(node.nodeValue);
+        if(fixed !== node.nodeValue) node.nodeValue = fixed;
+      });
+      root.querySelectorAll?.("[placeholder],input[value]").forEach(el => {
+        if(el.placeholder) el.placeholder = textOut(el.placeholder);
+        if(el.defaultValue && !el.matches("[data-field]")) el.defaultValue = textOut(el.defaultValue);
+      });
+    }
+    function showStep(id){ document.querySelectorAll(".doc-step").forEach(e => e.classList.remove("active","printing")); q("#"+id).classList.add("active"); repairVisibleText(q("#"+id)); }
+    function selectLang(next){ lang = next; params.set("lang", lang); history.replaceState(null, "", `${location.pathname}?${params}`); initForm(); }
+    function saveDraft(){ if(lang){ localStorage.setItem(draftKey(), JSON.stringify(form)); localStorage.setItem(draftKey() + "__at", String(Date.now())); localStorage.removeItem(draftKey() + "__done"); } }
+
+    async function loadCases(){
+      if(!selectedCourtId) return;
+      try {
+        const res = await fetch(`${API}/local-cases?court_id=${encodeURIComponent(selectedCourtId)}`);
+        cases = await res.json();
+      } catch { cases = []; }
+    }
+
+    async function loadLaws(){
+      try {
+        const res = await fetch(`${API}/laws?applies_to=${encodeURIComponent(kind)}`);
+        laws = await res.json();
+      } catch { laws = defaultLaws; }
+      if(!Array.isArray(laws) || !laws.length) laws = defaultLaws;
+    }
+
+    async function loadComplainants(){
+      try {
+        const res = await fetch(`${API}/complainants`);
+        complainants = await res.json();
+      } catch { complainants = []; }
+      if(!Array.isArray(complainants)) complainants = [];
+    }
+
+    function initForm(){
+      form = {...empty};
+      let savedDraft = null;
+      try { savedDraft = JSON.parse(localStorage.getItem(draftKey()) || "null"); } catch {}
+      if(savedDraft && typeof savedDraft === "object"){
+        form = ["application","pursis","surety"].includes(kind) ? {...empty, ...samplePrefill, ...savedDraft} : {...empty, ...savedDraft};
+      } else if(["application","pursis","surety"].includes(kind)){
+        form = {...empty, ...samplePrefill};
+      }
+      if(!form.date) form.date = today();
+      q("#top-title").textContent = textOut(L()[kind] || "Document");
+      q("#form-heading").textContent = textOut(L()[kind] || "Document");
+      const c = selectedCourt ? selectedCourt[lang === "gu" ? "gujarati" : "english"] : null;
+      q("#court-name").textContent = c?.court_name || "";
+      renderForm();
+      showStep("form-step");
+    }
+
+    function field(name){
+      const yes = lang === "gu" ? "હા" : "Yes";
+      const rented = lang === "gu" ? "ભાડાનું" : "Rented";
+      if(name === "residence_rent" && form.residence_type !== rented) return "";
+      if(name === "residence_rent_receipt" && form.residence_type !== rented) return "";
+      if(["business_name","business_address","business_nature","business_share","business_place_type"].includes(name) && form.business_engaged !== yes) return "";
+      if(["business_rent","business_rent_receipt"].includes(name) && !(form.business_engaged === yes && form.business_place_type === rented)) return "";
+      if(["employer_name","employer_address","service_salary","provident_fund"].includes(name) && form.service_engaged !== yes) return "";
+      if(name === "property_charge_details" && form.property_charge !== yes) return "";
+      if(name === "prior_surety_details" && form.prior_surety !== yes) return "";
+      if(name === "forfeiture_details" && form.surety_forfeited !== yes) return "";
+      if(name === "rejection_details" && form.surety_application_rejected !== yes) return "";
+      const isLong = ["body","reason","special_reason","subject","prayer","further_disclosure","additional_conditions","surety_address","surety_property","surety_bank","business_address","employer_address","property_charge_details","income_tax_details","prior_surety_details","forfeiture_details","rejection_details"].includes(name);
+      if(name === "case_number"){
+        return `<label>${L()[name]}</label><div class="case-input-wrap"><span class="case-prefix">eCC/No./</span><input data-field="case_number" value="${val("case_number")}" inputmode="numeric" pattern="[0-9/]*" /></div>`;
+      }
+      if(name === "complainant_name"){
+        return `<label>${esc(L()[name])}</label>${comboHtml("complainant_name", complainants.map(c => c.name || c), form.complainant_name, true)}`;
+      }
+      if(["date","bail_order_date"].includes(name)){
+        return `<label>${L()[name]}</label><div class="date-wrap"><input data-field="${name}" value="${form[name] || ""}" placeholder="DD/MM/YYYY" /><button class="btn btn-outline" type="button" onclick="this.nextElementSibling.showPicker ? this.nextElementSibling.showPicker() : this.nextElementSibling.click()">Cal</button><input type="date" data-date-target="${name}" value="${toIsoDate(form[name])}" style="height:1px;opacity:0;pointer-events:none;position:absolute;width:1px" /></div>`;
+      }
+      if(["law_selection","offence_section"].includes(name)){
+        const options = (laws.length ? laws : defaultLaws).map(law => lang === "gu" ? law.gujarati : law.english);
+        return `<label>${esc(L().law_selection || L()[name])}</label>${comboHtml(name, options, form[name], false)}`;
+      }
+      if(["stage","producing_party","business_engaged","service_engaged","property_charge","prior_surety","surety_forfeited","surety_application_rejected","residence_rent_receipt","business_rent_receipt","residence_type","business_place_type","identity_proof","solvency_proof","other_proof"].includes(name)){
+        const map = { stage:stages[lang], producing_party:parties[lang], residence_type:residenceTypes[lang], business_place_type:residenceTypes[lang], identity_proof:identityProofs[lang], solvency_proof:solvencyProofs[lang], other_proof:otherProofs[lang] };
+        const options = map[name] || yesNo[lang];
+        const extra = name === "producing_party" && (form.producing_party === "Custom" || form.producing_party === "કસ્ટમ") ? `<label>${esc(L().custom_party)}</label><input data-field="custom_party" value="${val("custom_party")}" />` : "";
+        return `<label>${esc(L()[name])}</label>${comboHtml(name, options, form[name], false)}${extra}`;
+      }
+      const input = isLong
+        ? `<textarea data-field="${name}">${val(name)}</textarea>`
+        : `<input data-field="${name}" value="${val(name)}" />`;
+      return `<label>${esc(L()[name])}</label>${input}`;
+    }
+
+    function comboHtml(name, options, value, allowCustom){
+      const unique = Array.from(new Set((options || []).filter(Boolean))).sort((a,b) => String(a).localeCompare(String(b)));
+      return `<div class="combo" data-combo="${name}" data-custom="${allowCustom ? "1" : "0"}">
+        <input type="hidden" data-field="${name}" value="${esc(value || "")}" />
+        <div class="combo-control"><span class="combo-value">${esc(value || (lang === "gu" ? "પસંદ કરો" : "Select"))}</span><span class="combo-arrow" aria-hidden="true"></span></div>
+        <div class="combo-panel">
+          <input class="combo-search" placeholder="${lang === "gu" ? "શોધો..." : "Type to search..."}" value="" />
+          <div class="combo-options">${unique.map(opt => `<div class="combo-option" data-value="${esc(opt)}">${esc(opt)}</div>`).join("")}</div>
+        </div>
+      </div>`;
+    }
+
+    function setupCombos(){
+      document.querySelectorAll(".combo").forEach(combo => {
+        const name = combo.dataset.combo;
+        const hidden = combo.querySelector("input[type='hidden']");
+        const control = combo.querySelector(".combo-control");
+        const valueEl = combo.querySelector(".combo-value");
+        const search = combo.querySelector(".combo-search");
+        const options = Array.from(combo.querySelectorAll(".combo-option"));
+        const allowCustom = combo.dataset.custom === "1";
+        const apply = (value) => {
+          if(name === "document_type_picker"){
+            const found = templates[kind].find(t => (lang === "gu" ? t.gu : t.en) === value);
+            if(found){ form.document_type = found.id; form.personal_bond_condition_mode = ""; activeConditionRole = ""; conditionDoneRoles = []; suretyPage = 0; saveDraft(); renderForm(); }
+            return;
+          }
+          if(name === "case_picker"){
+            const item = cases.find(c => caseOptionLabel(c) === value);
+            if(item){
+              form.case_number = String(item.case_number || "").replace(/^eCC\/No\.\//i, "");
+              form.complainant_name = item.complainant_name || "";
+              form.accused_name = item.accused_name || "";
+              form.accused_address = item.accused_address || item.address || "";
+              form.accused_contact = item.accused_contact || item.contact || item.mobile || "";
+              saveDraft();
+              renderForm();
+            }
+            return;
+          }
+          hidden.value = value;
+          form[name] = value;
+          valueEl.textContent = value || (lang === "gu" ? "પસંદ કરો" : "Select");
+          combo.classList.remove("open");
+          saveDraft();
+          if(["producing_party","residence_type","business_engaged","business_place_type","service_engaged","property_charge","prior_surety","surety_forfeited","surety_application_rejected"].includes(name)) renderForm();
+        };
+        control.onclick = () => {
+          document.querySelectorAll(".combo.open").forEach(c => { if(c !== combo) c.classList.remove("open"); });
+          combo.classList.toggle("open");
+          search.value = "";
+          options.forEach(o => o.style.display = "");
+          setTimeout(() => search.focus(), 0);
+        };
+        search.oninput = () => {
+          const term = search.value.toLowerCase();
+          options.forEach(o => o.style.display = o.textContent.toLowerCase().includes(term) ? "" : "none");
+        };
+        search.onkeydown = (e) => {
+          if(e.key === "Enter" && allowCustom && search.value.trim()){ e.preventDefault(); apply(search.value.trim()); }
+          if(e.key === "Escape") combo.classList.remove("open");
+        };
+        search.onblur = () => {
+          if(allowCustom && search.value.trim() && !options.some(o => o.dataset.value.toLowerCase() === search.value.trim().toLowerCase())) apply(search.value.trim());
+        };
+        options.forEach(o => {
+          o.addEventListener("mousedown", (e) => e.preventDefault());
+          o.onclick = () => apply(o.dataset.value);
+        });
+      });
+      document.addEventListener("click", (e) => {
+        if(!e.target.closest(".combo")) document.querySelectorAll(".combo.open").forEach(c => c.classList.remove("open"));
+      }, { once:true });
+    }
+
+    function visibleFields(fields){
+      return fields.filter(name => field(name) !== "");
+    }
+
+    function suretySections(fields){
+      const groups = [
+        { title: lang === "gu" ? "કેસ વિગતો" : "Case Details", names:["case_number","complainant_name","accused_name","accused_address","accused_contact","producing_party","advocate_name","date","police_station","cr_number","law_selection","offence_section","bail_order_date"] },
+        { title: lang === "gu" ? "જામીનદારની વ્યક્તિગત વિગતો" : "Surety Personal Details", names:["surety_name","surety_parent","surety_age","surety_occupation","surety_address","surety_mobile","residence_years","residence_type","residence_rent","residence_rent_receipt"] },
+        { title: lang === "gu" ? "ધંધો / નોકરી વિગતો" : "Occupation Details", names:["business_engaged","business_name","business_address","business_nature","business_share","business_place_type","business_rent","business_rent_receipt","service_engaged","employer_name","employer_address","service_salary","provident_fund"] },
+        { title: lang === "gu" ? "સધ્ધરતા અને બોન્ડ વિગતો" : "Solvency and Bond Details", names:["surety_property","property_value","property_share","property_charge","property_charge_details","income_tax_details","bank_balance","accused_known_since","surety_relation_detail","prior_surety","prior_surety_details","surety_forfeited","forfeiture_details","surety_application_rejected","rejection_details","identity_proof","solvency_proof","other_proof","bond_amount"] }
+      ];
+      return groups.map(g => ({...g, names:g.names.filter(n => fields.includes(n))})).filter(g => g.names.length);
+    }
+
+    function caseOptionLabel(item){
+      const caseNo = String(item.case_number || "").replace(/^eCC\/No\.\//i, "");
+      return `${caseNo} - ${item.accused_name || ""}`;
+    }
+
+    function currentCaseLabel(){
+      const raw = String(form.case_number || "").replace(/^eCC\/No\.\//i, "");
+      const item = cases.find(c => String(c.case_number || "").replace(/^eCC\/No\.\//i, "") === raw);
+      return item ? caseOptionLabel(item) : "";
+    }
+
+    function renderForm(){
+      if(!form.document_type || !templates[kind].some(t => t.id === form.document_type)) form.document_type = templates[kind][0].id;
+      const tmpl = selectedTemplate();
+      q("#bulk-tools").style.display = ["application","pursis"].includes(kind) ? "flex" : "none";
+      let fields = tmpl.fields;
+      let pager = "";
+      if(kind === "surety"){
+        const sections = suretySections(tmpl.fields);
+        if(suretyPage >= sections.length) suretyPage = sections.length - 1;
+        if(suretyPage < 0) suretyPage = 0;
+        const section = sections[suretyPage] || sections[0];
+        fields = section ? section.names : tmpl.fields;
+        q("#section-title").textContent = textOut(section ? section.title : (lang === "gu" ? "દસ્તાવેજ વિગતો" : "Document Details"));
+        q("#surety-progress").textContent = `${suretyPage + 1} / ${sections.length}`;
+        pager = `<div class="pager-row">
+          <button type="button" class="btn btn-secondary" ${suretyPage===0?"disabled":""} onclick="changeSuretyPage(-1)">${lang==="gu"?"પાછળ":"Previous"}</button>
+          <button type="button" class="btn btn-primary" ${suretyPage>=sections.length-1?"disabled":""} onclick="changeSuretyPage(1)">${lang==="gu"?"આગળ":"Next"}</button>
+        </div>`;
+      } else {
+        q("#section-title").textContent = lang === "gu" ? "દસ્તાવેજ વિગતો" : "Document Details";
+        q("#surety-progress").textContent = "";
+      }
+      const showHeaderFields = kind !== "surety" || suretyPage === 0;
+      q("#preview-btn").style.display = kind === "surety" && suretyPage < suretySections(tmpl.fields).length - 1 ? "none" : "";
+      q("#form-grid").innerHTML = `
+        ${showHeaderFields ? `<label>${esc(L().choose_type)}</label>${comboHtml("document_type_picker", templates[kind].map(t => lang==="gu"?t.gu:t.en), documentTitle(), false)}
+        <label>${esc(L().select_case)}</label>${comboHtml("case_picker", cases.map(caseOptionLabel), currentCaseLabel(), false)}` : ""}
+        ${fields.map(field).filter(Boolean).join("")}
+        ${pager}
+      `;
+      document.querySelectorAll("[data-field]").forEach(el => {
+        el.onfocus = () => {
+          if(isFocusedVoiceTarget(el)) lastFocusedVoiceTarget = el;
+          updateGlobalVoiceBar();
+          if(el.getAttribute("list") && typeof el.select === "function") el.select();
+        };
+        el.oninput = () => {
+          let value = el.value;
+          if(el.dataset.field === "case_number"){
+            const cleaned = value.replace(/[^0-9/]/g, "");
+            q("#msg").textContent = cleaned !== value ? (lang === "gu" ? "કેસ નંબર માટે માત્ર English અંકો અને / દાખલ કરી શકાય." : "Only English numbers and / are allowed in case number.") : "";
+            value = cleaned;
+          }
+          if(["date","bail_order_date"].includes(el.dataset.field)) value = value.replace(/[૦-૯]/g, d => "૦૧૨૩૪૫૬૭૮૯".indexOf(d));
+          form[el.dataset.field] = value; el.value = value; saveDraft();
+        };
+        el.onchange = () => {
+          form[el.dataset.field] = el.value;
+          saveDraft();
+          if(["residence_type","business_engaged","business_place_type","service_engaged","property_charge","prior_surety","surety_forfeited","surety_application_rejected"].includes(el.dataset.field)) renderForm();
+        };
+      });
+      updateGlobalVoiceBar();
+      setupCombos();
+      document.querySelectorAll("[data-date-target]").forEach(el => {
+        el.onchange = () => { form[el.dataset.dateTarget] = fromIsoDate(el.value); saveDraft(); renderForm(); };
+      });
+      document.querySelectorAll("[data-mic]").forEach(btn => {
+        btn.onmousedown = e => e.preventDefault();
+        btn.onclick = () => toggleVoice(btn.dataset.mic);
+      });
+      repairVisibleText(q("#form-step"));
+    }
+
+    function changeSuretyPage(delta){
+      suretyPage += delta;
+      renderForm();
+    }
+
+    function voiceMessage(key){
+      const messages = {
+        unsupported: lang === "gu" ? "આ બ્રાઉઝરમાં વોઇસ ટાઇપિંગ સપોર્ટેડ નથી. કૃપા કરીને Google Chrome અથવા Microsoft Edge નો ઉપયોગ કરો." : "Voice typing is not supported in this browser. Please use Google Chrome or Microsoft Edge.",
+        listening: lang === "gu" ? "સાંભળે છે..." : "Listening...",
+        stopped: lang === "gu" ? "બંધ થયું" : "Stopped",
+        denied: lang === "gu" ? "માઇક્રોફોન પરવાનગી નકારી." : "Microphone permission denied"
+      };
+      return messages[key];
+    }
+
+    function speechRecognitionLang(){
+      return lang === "gu" ? "gu-IN" : "en-IN";
+    }
+
+    function stopActiveVoice(){
+      if(!activeVoice) return;
+      try { activeVoice.recognition.stop(); } catch {}
+      activeVoice = null;
+      document.querySelectorAll(".mic-btn.listening").forEach(btn => btn.classList.remove("listening"));
+      document.querySelectorAll(".voice-status.listening").forEach(status => status.classList.remove("listening"));
+    }
+
+    function setVoiceStatus(name, text){
+      const el = document.querySelector(`[data-voice-status="${name}"]`);
+      if(el) el.textContent = text;
+      if(el) el.classList.toggle("listening", text === voiceMessage("listening"));
+      document.querySelectorAll(`[data-mic="${name}"]`).forEach(btn => btn.classList.toggle("listening", text === voiceMessage("listening")));
+    }
+
+    function insertAtCursor(el, text){
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? el.value.length;
+      el.value = el.value.slice(0, start) + text + el.value.slice(end);
+      const next = start + text.length;
+      el.selectionStart = el.selectionEnd = next;
+      form[el.dataset.field] = el.value;
+      saveDraft();
+    }
+
+    function toggleVoice(name){
+      const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if(!Speech){ setVoiceStatus(name, voiceMessage("unsupported")); return; }
+      if(activeVoice && activeVoice.name === name){ stopActiveVoice(); return; }
+      if(activeVoice) stopActiveVoice();
+      const el = document.querySelector(`[data-field="${name}"]`);
+      const recognition = new Speech();
+      recognition.lang = speechRecognitionLang();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.onstart = () => setVoiceStatus(name, voiceMessage("listening"));
+      recognition.onend = () => { setVoiceStatus(name, voiceMessage("stopped")); activeVoice = null; };
+      recognition.onerror = (event) => setVoiceStatus(name, event.error === "not-allowed" ? voiceMessage("denied") : voiceMessage("stopped"));
+      recognition.onresult = (event) => {
+        let text = "";
+        for(let i = event.resultIndex; i < event.results.length; i++) text += event.results[i][0].transcript;
+        const target = focusedVoiceTarget() || (activeVoice?.el && document.body.contains(activeVoice.el) ? activeVoice.el : el);
+        if(text) {
+          const prefix = target.value && !/\s$/.test(target.value) ? " " : "";
+          if(target.dataset.field) insertAtCursor(target, prefix + text);
+          else insertAtCursorPlain(target, prefix + text);
+        }
+      };
+      activeVoice = { name, el, recognition };
+      recognition.start();
+    }
+
+    function setCustomVoiceStatus(id, text){
+      const el = document.querySelector(`[data-voice-status-custom="${id}"]`);
+      if(el) el.textContent = text;
+      if(el) el.classList.toggle("listening", text === voiceMessage("listening"));
+      document.querySelectorAll(`[data-mic-custom="${id}"]`).forEach(btn => btn.classList.toggle("listening", text === voiceMessage("listening")));
+    }
+
+    function insertAtCursorPlain(el, text){
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? el.value.length;
+      el.value = el.value.slice(0, start) + text + el.value.slice(end);
+      const next = start + text.length;
+      el.selectionStart = el.selectionEnd = next;
+    }
+
+    function toggleCustomVoice(id){
+      const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if(!Speech){ setCustomVoiceStatus(id, voiceMessage("unsupported")); return; }
+      if(activeVoice && activeVoice.name === id){ stopActiveVoice(); return; }
+      if(activeVoice) stopActiveVoice();
+      const el = q(`#${id}`);
+      if(!el) return;
+      const recognition = new Speech();
+      recognition.lang = speechRecognitionLang();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.onstart = () => setCustomVoiceStatus(id, voiceMessage("listening"));
+      recognition.onend = () => { setCustomVoiceStatus(id, voiceMessage("stopped")); activeVoice = null; };
+      recognition.onerror = (event) => setCustomVoiceStatus(id, event.error === "not-allowed" ? voiceMessage("denied") : voiceMessage("stopped"));
+      recognition.onresult = (event) => {
+        let text = "";
+        for(let i = event.resultIndex; i < event.results.length; i++) text += event.results[i][0].transcript;
+        const target = focusedVoiceTarget() || (activeVoice?.el && document.body.contains(activeVoice.el) ? activeVoice.el : el);
+        if(text) {
+          const prefix = target.value && !/\s$/.test(target.value) ? " " : "";
+          if(target.dataset.field) insertAtCursor(target, prefix + text);
+          else insertAtCursorPlain(target, prefix + text);
+        }
+      };
+      activeVoice = { name:id, el, recognition };
+      recognition.start();
+    }
+
+    function setGlobalVoiceStatus(text){
+      const status = q("#global-voice-status");
+      const btn = q("#global-mic");
+      if(status) status.textContent = text || "";
+      if(status) status.classList.toggle("listening", text === voiceMessage("listening"));
+      if(btn) btn.classList.toggle("listening", text === voiceMessage("listening"));
+    }
+
+    function isFocusedVoiceTarget(el){
+      if(!el || !["INPUT","TEXTAREA"].includes(el.tagName)) return false;
+      const field = el.dataset.field || "";
+      const type = (el.getAttribute("type") || "text").toLowerCase();
+      if(["case_number","date","bail_order_date"].includes(field)) return false;
+      if(["date","number","password","hidden","file","checkbox","radio"].includes(type)) return false;
+      if(el.closest(".combo")) return false;
+      return true;
+    }
+
+    function focusedVoiceTarget(){
+      const el = document.activeElement;
+      if(isFocusedVoiceTarget(el)) return el;
+      return lastFocusedVoiceTarget && document.body.contains(lastFocusedVoiceTarget) && isFocusedVoiceTarget(lastFocusedVoiceTarget) ? lastFocusedVoiceTarget : null;
+    }
+
+    function updateGlobalVoiceBar(){
+      const bar = document.querySelector(".global-voice-bar");
+      if(bar) bar.classList.toggle("ready", Boolean(focusedVoiceTarget()));
+    }
+
+    function toggleFocusedVoice(){
+      const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if(!Speech){ setGlobalVoiceStatus(voiceMessage("unsupported")); return; }
+      const el = focusedVoiceTarget();
+      if(!el){ setGlobalVoiceStatus(lang === "gu" ? "કૃપા કરીને લખાણની ફીલ્ડમાં કર્સર મૂકો." : "Place cursor in a text field first."); return; }
+      if(activeVoice && activeVoice.name === "global"){ stopActiveVoice(); return; }
+      if(activeVoice) stopActiveVoice();
+      try { el.focus(); } catch {}
+      const recognition = new Speech();
+      recognition.lang = speechRecognitionLang();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.onstart = () => setGlobalVoiceStatus(voiceMessage("listening"));
+      recognition.onend = () => { setGlobalVoiceStatus(voiceMessage("stopped")); activeVoice = null; };
+      recognition.onerror = (event) => setGlobalVoiceStatus(event.error === "not-allowed" ? voiceMessage("denied") : voiceMessage("stopped"));
+      recognition.onresult = (event) => {
+        let text = "";
+        for(let i = event.resultIndex; i < event.results.length; i++) text += event.results[i][0].transcript;
+        if(!text) return;
+        const target = focusedVoiceTarget() || (activeVoice?.el && document.body.contains(activeVoice.el) ? activeVoice.el : el);
+        const prefix = target.value && !/\s$/.test(target.value) ? " " : "";
+        if(target.dataset.field) insertAtCursor(target, prefix + text);
+        else insertAtCursorPlain(target, prefix + text);
+      };
+      activeVoice = { name:"global", el, recognition };
+      recognition.start();
+    }
+
+    document.addEventListener("focusin", e => {
+      if(isFocusedVoiceTarget(e.target)){
+        lastFocusedVoiceTarget = e.target;
+        if(activeVoice?.el) activeVoice.el = e.target;
+      }
+      updateGlobalVoiceBar();
+    });
+    document.addEventListener("pointerdown", e => {
+      if(isFocusedVoiceTarget(e.target)){
+        lastFocusedVoiceTarget = e.target;
+        if(activeVoice?.el) activeVoice.el = e.target;
+      }
+    }, true);
+    document.addEventListener("focusout", () => setTimeout(updateGlobalVoiceBar, 0));
+    document.addEventListener("click", e => {
+      const nav = e.target.closest("a,button");
+      if(!nav) return;
+      if(nav.closest(".global-voice-bar") || nav.classList.contains("mic-btn") || nav.hasAttribute("data-mic") || nav.hasAttribute("data-mic-custom")) return;
+      stopActiveVoice();
+    }, true);
+    window.addEventListener("pagehide", stopActiveVoice);
+    window.addEventListener("beforeunload", stopActiveVoice);
+    window.addEventListener("popstate", stopActiveVoice);
+    window.addEventListener("hashchange", stopActiveVoice);
+    document.addEventListener("visibilitychange", () => { if(document.hidden) stopActiveVoice(); });
+
+    function bulkFieldList(tmpl){
+      return Array.from(new Set(tmpl.fields.filter(f => !["date"].includes(f))));
+    }
+
+    function xmlCell(value){
+      return `<Cell><Data ss:Type="String">${esc(value)}</Data></Cell>`;
+    }
+
+    function crc32(bytes){
+      let table = crc32.table;
+      if(!table){
+        table = crc32.table = new Uint32Array(256);
+        for(let i=0;i<256;i++){
+          let c=i;
+          for(let k=0;k<8;k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+          table[i]=c>>>0;
+        }
+      }
+      let crc = 0xffffffff;
+      for(const b of bytes) crc = table[(crc ^ b) & 255] ^ (crc >>> 8);
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    function u16(n){ return [n & 255, (n >>> 8) & 255]; }
+    function u32(n){ return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; }
+
+    function zipStore(files, type = "application/zip"){
+      const enc = new TextEncoder();
+      const parts = [];
+      const central = [];
+      let offset = 0;
+      const now = new Date();
+      const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+      const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+      for(const file of files){
+        const name = enc.encode(file.name);
+        const data = typeof file.content === "string" ? enc.encode(file.content) : file.content;
+        const crc = crc32(data);
+        const local = new Uint8Array([0x50,0x4b,0x03,0x04, ...u16(20), ...u16(0), ...u16(0), ...u16(dosTime), ...u16(dosDate), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0)]);
+        parts.push(local, name, data);
+        central.push({ name, crc, size:data.length, offset });
+        offset += local.length + name.length + data.length;
+      }
+      const centralStart = offset;
+      for(const file of central){
+        const head = new Uint8Array([0x50,0x4b,0x01,0x02, ...u16(20), ...u16(20), ...u16(0), ...u16(0), ...u16(dosTime), ...u16(dosDate), ...u32(file.crc), ...u32(file.size), ...u32(file.size), ...u16(file.name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(file.offset)]);
+        parts.push(head, file.name);
+        offset += head.length + file.name.length;
+      }
+      const centralSize = offset - centralStart;
+      parts.push(new Uint8Array([0x50,0x4b,0x05,0x06, ...u16(0), ...u16(0), ...u16(central.length), ...u16(central.length), ...u32(centralSize), ...u32(centralStart), ...u16(0)]));
+      return new Blob(parts, {type});
+    }
+
+    function xlsxCell(ref, value){
+      return `<c r="${ref}" t="inlineStr"><is><t>${esc(value || "")}</t></is></c>`;
+    }
+
+    function colName(index){
+      let name = "";
+      index += 1;
+      while(index){ const mod = (index - 1) % 26; name = String.fromCharCode(65 + mod) + name; index = Math.floor((index - mod) / 26); }
+      return name;
+    }
+
+    function xlsxSheetXml(rows, validations = []){
+      const rowXml = rows.map((row, r) => `<row r="${r+1}">${row.map((cell, c) => xlsxCell(`${colName(c)}${r+1}`, cell)).join("")}</row>`).join("");
+      const validationXml = validations.length
+        ? `<dataValidations count="${validations.length}">${validations.map(v => `<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${v.sqref}"><formula1>${esc(v.formula)}</formula1></dataValidation>`).join("")}</dataValidations>`
+        : "";
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rowXml}</sheetData>${validationXml}</worksheet>`;
+    }
+
+    function makeXlsx(sheets){
+      const safeSheets = sheets.map((s, i) => ({...s, name:String(s.name || `Sheet${i+1}`).replace(/[\\/?*[\]:]/g, " ").slice(0,31) || `Sheet${i+1}`}));
+      const overrides = safeSheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("");
+      const sheetDefs = safeSheets.map((s, i) => `<sheet name="${esc(s.name)}"${s.hidden ? ' state="hidden"' : ""} sheetId="${i+1}" r:id="rId${i+1}"/>`).join("");
+      const rels = safeSheets.map((_, i) => `<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("");
+      const files = [
+        {name:"[Content_Types].xml", content:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides}</Types>`},
+        {name:"_rels/.rels", content:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+        {name:"xl/workbook.xml", content:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheetDefs}</sheets></workbook>`},
+        {name:"xl/_rels/workbook.xml.rels", content:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`},
+        ...safeSheets.map((s, i) => ({name:`xl/worksheets/sheet${i+1}.xml`, content:xlsxSheetXml(s.rows, s.validations || [])}))
+      ];
+      return zipStore(files, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    function bulkValidationOptions(fieldName){
+      const yesNoFields = ["business_engaged","service_engaged","property_charge","prior_surety","surety_forfeited","surety_application_rejected","residence_rent_receipt","business_rent_receipt"];
+      if(fieldName === "stage") return stages[lang] || stages.en;
+      if(fieldName === "producing_party") return parties[lang] || parties.en;
+      if(fieldName === "residence_type" || fieldName === "business_place_type") return residenceTypes[lang] || residenceTypes.en;
+      if(fieldName === "identity_proof") return identityProofs[lang] || identityProofs.en;
+      if(fieldName === "solvency_proof") return solvencyProofs[lang] || solvencyProofs.en;
+      if(fieldName === "other_proof") return otherProofs[lang] || otherProofs.en;
+      if(fieldName === "law_selection" || fieldName === "offence_section") return (laws.length ? laws : defaultLaws).map(law => lang === "gu" ? law.gujarati : law.english).filter(Boolean);
+      if(yesNoFields.includes(fieldName)) return yesNo[lang] || yesNo.en;
+      return null;
+    }
+
+    function downloadBulkTemplate(){
+      const docs = templates[kind];
+      const listMap = new Map();
+      const getListKey = (field, values) => {
+        const normalized = values.map(String).join("\u0001");
+        const key = `${field}_${listMap.size + 1}`;
+        for(const [existingKey, existing] of listMap.entries()){
+          if(existing.normalized === normalized) return existingKey;
+        }
+        listMap.set(key, { field, values, normalized });
+        return key;
+      };
+      const sheets = docs.map(t => {
+        const fields = bulkFieldList(t);
+        const validations = [];
+        fields.forEach((fieldName, index) => {
+          const options = bulkValidationOptions(fieldName);
+          if(!options || !options.length) return;
+          const key = getListKey(fieldName, options);
+          const listIndex = Array.from(listMap.keys()).indexOf(key);
+          const listCol = colName(listIndex);
+          validations.push({ sqref:`${colName(index)}3:${colName(index)}500`, formula:`'Data Lists'!$${listCol}$2:$${listCol}$${options.length + 1}` });
+        });
+        return { name:(lang==="gu"?t.gu:t.en).slice(0,28), rows:[fields, fields.map(f => L()[f] || f), fields.map(() => "")], validations };
+      });
+      if(listMap.size){
+        const lists = Array.from(listMap.values());
+        const maxRows = Math.max(...lists.map(item => item.values.length));
+        const rows = [
+          lists.map(item => L()[item.field] || item.field),
+          ...Array.from({length:maxRows}, (_, rowIndex) => lists.map(item => item.values[rowIndex] || ""))
+        ];
+        sheets.push({ name:"Data Lists", rows, hidden:true });
+      }
+      const blob = makeXlsx(sheets);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${kind}-bulk-template.xlsx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function unzipXlsx(buffer){
+      const bytes = new Uint8Array(buffer);
+      const dec = new TextDecoder();
+      const files = {};
+      let p = 0;
+      while(p + 30 < bytes.length && bytes[p] === 0x50 && bytes[p+1] === 0x4b && bytes[p+2] === 0x03 && bytes[p+3] === 0x04){
+        const method = bytes[p+8] | (bytes[p+9] << 8);
+        const compressedSize = bytes[p+18] | (bytes[p+19] << 8) | (bytes[p+20] << 16) | (bytes[p+21] << 24);
+        const nameLen = bytes[p+26] | (bytes[p+27] << 8);
+        const extraLen = bytes[p+28] | (bytes[p+29] << 8);
+        const name = dec.decode(bytes.slice(p+30, p+30+nameLen));
+        const start = p + 30 + nameLen + extraLen;
+        const raw = bytes.slice(start, start + compressedSize);
+        if(method === 0) files[name] = dec.decode(raw);
+        else if(method === 8 && window.DecompressionStream){
+          const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+          files[name] = dec.decode(await new Response(stream).arrayBuffer());
+        }
+        p = start + compressedSize;
+      }
+      return files;
+    }
+
+    function parseSheetRows(xml, sharedStrings){
+      const doc = new DOMParser().parseFromString(xml, "text/xml");
+      return Array.from(doc.getElementsByTagNameNS("*", "row")).map(row => {
+        const out = [];
+        Array.from(row.getElementsByTagNameNS("*", "c")).forEach(cell => {
+          const ref = cell.getAttribute("r") || "A1";
+          const col = ref.replace(/[0-9]/g, "").split("").reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+          const type = cell.getAttribute("t");
+          let value = "";
+          const inline = cell.getElementsByTagNameNS("*", "t")[0];
+          const v = cell.getElementsByTagNameNS("*", "v")[0];
+          if(type === "s" && v) value = sharedStrings[Number(v.textContent)] || "";
+          else if(inline) value = inline.textContent || "";
+          else if(v) value = v.textContent || "";
+          out[col] = value;
+        });
+        return out.map(v => v || "");
+      });
+    }
+
+    async function parseXlsxFile(file){
+      const files = await unzipXlsx(await file.arrayBuffer());
+      const sharedStrings = files["xl/sharedStrings.xml"] ? Array.from(new DOMParser().parseFromString(files["xl/sharedStrings.xml"], "text/xml").getElementsByTagNameNS("*", "si")).map(si => Array.from(si.getElementsByTagNameNS("*", "t")).map(t => t.textContent).join("")) : [];
+      const workbook = files["xl/workbook.xml"] ? new DOMParser().parseFromString(files["xl/workbook.xml"], "text/xml") : null;
+      const names = workbook ? Array.from(workbook.getElementsByTagNameNS("*", "sheet")).map(s => s.getAttribute("name") || "") : [];
+      return Object.entries(files).filter(([name]) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)).sort(([a],[b]) => a.localeCompare(b, undefined, {numeric:true})).map(([name, xml], i) => ({name:names[i] || name, rows:parseSheetRows(xml, sharedStrings)}));
+    }
+
+    async function uploadBulkExcel(event){
+      const file = event.target.files?.[0];
+      if(!file) return;
+      const sheets = file.name.toLowerCase().endsWith(".xlsx") ? await parseXlsxFile(file) : null;
+      bulkRows = [];
+      if(sheets){
+        for(const sheet of sheets){
+          if(sheet.name === "Data Lists") continue;
+          const tmpl = templates[kind].find(t => [t.en,t.gu].some(n => n && n.slice(0,28) === sheet.name)) || templates[kind][bulkRows.length] || templates[kind][0];
+          if(sheet.rows.length < 3) continue;
+          const keys = sheet.rows[0].map(v => String(v || "").trim());
+          for(const vals of sheet.rows.slice(2)){
+            if(!vals.some(Boolean)) continue;
+            const rowForm = {...empty, document_type:tmpl.id, date:today()};
+            keys.forEach((k,i) => { if(k) rowForm[k] = vals[i] || ""; });
+            bulkRows.push({tmpl, form: rowForm});
+          }
+        }
+      } else {
+        const text = await file.text();
+        const doc = new DOMParser().parseFromString(text, "text/xml");
+        const xmlSheets = Array.from(doc.getElementsByTagNameNS("*", "Worksheet"));
+        for(const sheet of xmlSheets){
+          const sheetName = sheet.getAttribute("ss:Name") || sheet.getAttribute("Name") || "";
+          const tmpl = templates[kind].find(t => [t.en,t.gu].some(n => n && n.slice(0,28) === sheetName)) || templates[kind][bulkRows.length] || templates[kind][0];
+          const rows = Array.from(sheet.getElementsByTagNameNS("*", "Row"));
+          if(rows.length < 3) continue;
+          const keys = Array.from(rows[0].getElementsByTagNameNS("*", "Data")).map(d => d.textContent.trim());
+          for(const row of rows.slice(2)){
+            const vals = Array.from(row.getElementsByTagNameNS("*", "Data")).map(d => d.textContent.trim());
+            if(!vals.some(Boolean)) continue;
+            const rowForm = {...empty, document_type:tmpl.id, date:today()};
+            keys.forEach((k,i) => { if(k) rowForm[k] = vals[i] || ""; });
+            bulkRows.push({tmpl, form: rowForm});
+          }
+        }
+      }
+      q("#msg").className = "success";
+      q("#msg").textContent = `${bulkRows.length} ${lang === "gu" ? "એન્ટ્રી અપલોડ થઇ." : "entries uploaded."}`;
+      renderBulkDesk();
+      event.target.value = "";
+    }
+
+    function renderBulkDesk(){
+      const desk = q("#bulk-desk");
+      if(!bulkRows.length){ desk.style.display = "none"; return; }
+      desk.style.display = "block";
+      const select = q("#bulk-row-select");
+      select.innerHTML = bulkRows.map((row, i) => `<option value="${i}">${i+1}. ${esc(lang==="gu"?row.tmpl.gu:row.tmpl.en)} - ${esc(row.form.case_number || "")} - ${esc(row.form.accused_name || "")}</option>`).join("");
+      select.onchange = () => showBulkRow(Number(select.value || 0));
+      showBulkRow(0);
+    }
+
+    function showBulkRow(index){
+      const row = bulkRows[index];
+      q("#bulk-row-preview").innerHTML = row ? `Case: ${esc(row.form.case_number || "")}<br/>Complainant: ${esc(row.form.complainant_name || "")}<br/>Accused: ${esc(row.form.accused_name || "")}` : "";
+    }
+
+    async function generateBulkRows(){
+      let saved = 0;
+      const priorForm = {...form};
+      const files = [];
+      for(const row of bulkRows){
+        form = {...empty, ...row.form, document_type: row.tmpl.id, date: row.form.date || today()};
+        const docHtml = textOut(regularDoc());
+        const title = lang === "gu" ? row.tmpl.gu : row.tmpl.en;
+        const fileBase = `${String(row.form.case_number || saved + 1).replace(/[^\w.-]+/g, "_")}_${String(title || kind).replace(/[^\w.-]+/g, "_")}`;
+        files.push({
+          filename: `${fileBase}.pdf`,
+          title,
+          html: docHtml,
+        });
+        const payload = {
+          document_kind: kind, language: lang, court_id: selectedCourtId, case_number: row.form.case_number,
+          complainant_name: row.form.complainant_name, accused_name: row.form.accused_name, document_type: lang==="gu"?row.tmpl.gu:row.tmpl.en,
+          producing_party: row.form.producing_party, applicant_name: row.form.applicant_name, advocate_name: row.form.advocate_name,
+          date: row.form.date || today(), fields: row.form, html: docHtml
+        };
+        await fetch(`${API}/generated-documents`, { method:"POST", headers: Object.assign({ "Content-Type":"application/json" }, localStorage.getItem("token") ? { Authorization: "Bearer " + localStorage.getItem("token") } : {}), body: JSON.stringify(payload) });
+        saved++;
+      }
+      form = priorForm;
+      if(files.length){
+        const zipResponse = await fetch(`${API}/bulk-pdf-zip`, {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ documents: files })
+        });
+        if(!zipResponse.ok){
+          throw new Error(await zipResponse.text());
+        }
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(await zipResponse.blob());
+        a.download = `${kind}-bulk-generated-pdf.zip`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 500);
+      }
+      q("#msg").className = "success";
+      q("#msg").textContent = `${saved} ${lang === "gu" ? "એન્ટ્રી સેવ થઇ અને ZIP ડાઉનલોડ થઇ." : "entries saved and ZIP downloaded."}`;
+    }
+
+    function bulkHtmlDocument(bodyHtml, title){
+      return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+        @page{size:A4;margin:18mm}body{background:#fff;color:#000;font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif;font-size:17px;line-height:1.55}.print-wrap{max-width:794px;margin:0 auto}.legal-doc,.legal-doc *{font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif}.legal-doc{font-size:17px;line-height:1.55;text-align:justify;text-justify:inter-word}.court-head,.court-title,h1,h2,h3{text-align:center}.case-row,.signature-row{display:flex;justify-content:space-between;gap:20px}.case-no-right{text-align:right;margin:8px 0}.party-center{text-align:center;margin:12px 0}.signature-line{border-top:1px solid #000;min-width:210px;padding-top:5px;text-align:center}.esign-keywords{min-width:250px;text-align:center}.esign-keyword{font-weight:700;white-space:nowrap}.esign-gap{height:24mm}.details-grid{display:grid;grid-template-columns:42mm 1fr;gap:4px 8px;margin:10px 0}@media print{.no-print{display:none!important}}
+      </style></head><body><div class="no-print" style="margin:12px;text-align:right"><button onclick="window.print()">Print / Save PDF</button></div><div class="print-wrap">${bodyHtml}</div></body></html>`;
+    }
+
+    function bulkIndexDocument(files){
+      const links = files.map(f => `<li><a href="${esc(f.name)}">${esc(f.name)}</a></li>`).join("");
+      return `<!doctype html><html><head><meta charset="utf-8"><title>Bulk Generated Documents</title></head><body><h1>Bulk Generated Documents</h1><p>Open any file below and use Print / Save PDF.</p><ul>${links}</ul></body></html>`;
+    }
+
+    function validate(){
+      const required = kind === "surety" && form.document_type === "personal_bond_accused"
+        ? ["case_number","complainant_name","accused_name","accused_address","accused_contact","producing_party","advocate_name","date","police_station","cr_number","law_selection","bond_amount"]
+        : kind === "surety"
+        ? ["case_number","complainant_name","accused_name","producing_party","surety_name","surety_address","bond_amount","identity_proof","solvency_proof"]
+        : ["case_number","complainant_name","accused_name","producing_party"];
+      const missing = required.filter(k => !String(form[k] || "").trim());
+      document.querySelectorAll(".field-error").forEach(el => el.classList.remove("field-error"));
+      missing.forEach(k => document.querySelectorAll(`[data-field="${k}"]`).forEach(el => el.classList.add("field-error")));
+      missing.forEach(k => document.querySelectorAll(`.combo[data-combo="${k}"] .combo-control`).forEach(el => el.classList.add("field-error")));
+      return { ok: missing.length === 0, missing };
+    }
+
+    function courtBlock(){
+      const c = selectedCourt ? selectedCourt[lang === "gu" ? "gujarati" : "english"] : {};
+      return c || {};
+    }
+
+    function documentTitle(){
+      const t = selectedTemplate();
+      return lang === "gu" ? t.gu : t.en;
+    }
+
+    function partyText(){
+      return form.producing_party === "Custom" || form.producing_party === "કસ્ટમ" ? val("custom_party") : val("producing_party");
+    }
+
+    function isComplainantProducingParty(){
+      const party = String(form.producing_party || "").trim().toLowerCase();
+      return party === "complainant" || form.producing_party === "ફરિયાદી";
+    }
+
+    function advocateESignBlock(){
+      return `<div class="esign-keywords">
+        <div class="esign-keyword">Locate the Advocate Signature Here</div>
+        ${isComplainantProducingParty() ? `<div class="esign-gap"></div><div class="esign-keyword">Locate the Complainant Signature Here</div>` : ""}
+        ${form.advocate_name ? `<p>${val("advocate_name")}</p>` : ""}
+      </div>`;
+    }
+
+    function subjectLine(){
+      const subject = form.subject || documentTitle();
+      if(!subject) return "";
+      return `<h2>${lang === "gu" ? "વિષય - " : "Subject - "}${esc(subject)}</h2>`;
+    }
+
+    function disputedItem(){
+      const law = `${form.law_selection || ""} ${form.offence_section || ""}`.toLowerCase();
+      const isPssa = law.includes("payment") || law.includes("settlement") || law.includes("પેમેન્ટ") || law.includes("સેટલમેન્ટ") || law.includes("૨૫") || law.includes("25");
+      return lang === "gu" ? (isPssa ? "વિવાદિત સૂચના (ઇલેક્ટ્રોનિક ફંડ ટ્રાન્સફર)" : "વિવાદિત ચેક") : (isPssa ? "disputed instruction (electronic fund transfer)" : "Disputed Cheque/s");
+    }
+
+    function courtHeading(){
+      const c = courtBlock();
+      if(lang === "gu") return `${esc(c.court_name || "")} ની કોર્ટ માં.`;
+      return `In the Court of ${esc(c.court_name || "")}`;
+    }
+
+    function judicialSignatureBlock(){
+      const c = courtBlock();
+      const name = (c.judge_name || "").trim();
+      const designation = (c.judge_designation || "").trim();
+      const city = lang === "gu" ? "\u0A85\u0AAE\u0AA6\u0ABE\u0AB5\u0ABE\u0AA6 \u0AB6\u0AB9\u0AC7\u0AB0." : "Ahmedabad City.";
+      return `<div class="signature-line">${name ? `(${esc(name)})<br/>` : ""}${designation ? `${esc(designation)}<br/>` : ""}${city}</div>`;
+    }
+
+    function applicationPrayer(){
+      const title = documentTitle();
+      const party = partyText();
+      const special = form.special_reason ? ` ${val("special_reason")}` : "";
+      if(lang === "gu"){
+        if(form.document_type === "adjournment") return `આથી નમ્રતા પૂર્વક જણાવવાનું કે, હાલ ની અરજી અમો ${party || "રજૂ કરનાર પક્ષ"} રજૂ કરી એ છે. ઉપરોક્ત કામ હાલ ${val("stage") || "નિયત તબક્કે"} ના તબક્કે ચાલતું આવેલ છે. ${val("reason") || ""} ${special}`;
+        if(form.document_type === "exemption") return `આથી નમ્રતાપૂર્વક જણાવવાનું કે ઉપરોક્ત કામ ${val("stage") || "નિયત તબક્કે"} મુકાયેલ છે. પરંતુ ${party || "રજૂ કરનાર પક્ષ"} આજ રોજ ${val("reason") || "કારણસર"} હાજર રહી શકે તેમ નથી. તેથી આજ પૂરતી હાજરીમાંથી મુક્તિ આપવા વિનંતી છે.${special}`;
+        if(form.document_type === "fine_deposit") return `આથી નમ્રતાપૂર્વક જણાવવાનું કે ${party || "પક્ષકાર"} ને આ અદાલત દ્વારા દંડ / ફાઇન પેટે રૂ. ${val("amount")} (${val("amount_words")}) જમા કરાવવાનું જણાવવામાં આવેલ છે. તેથી સદર રકમ અદાલતના ખાતામાં જમા સ્વીકારવા જરૂરી હુકમ કરવા વિનંતી છે.${special}`;
+        if(form.document_type === "dlsa_cost") return `આથી નમ્રતાપૂર્વક જણાવવાનું કે ${party || "પક્ષકાર"} ને ડી.એલ.એસ.એ. સમક્ષ ખર્ચ પેટે રૂ. ${val("amount")} (${val("amount_words")}) જમા કરાવવાનું જણાવવામાં આવેલ છે. તેથી ડી.એલ.એસ.એ., સી.જે.એમ. કોર્ટ્સ, અમદાવાદ શહેરના ખાતામાં સદર રકમ જમા સ્વીકારવા જરૂરી હુકમ કરવા વિનંતી છે.${special}`;
+        if(form.document_type === "surety_deposit") return `આથી નમ્રતાપૂર્વક જણાવવાનું કે હાલના કામમાં અરજદારને રૂ. ${val("amount")} (${val("amount_words")}) ના બેઇલ બોન્ડ અને તેટલી જ રકમની જામીનગીરી રજૂ કરવાની થાય છે. પરંતુ આજ રોજ જામીન રજૂ કરવાની સગવડ ન હોવાથી જામીનગીરીની રકમના બદલે રોકડ જમા સ્વીકારવા વિનંતી છે.${special}`;
+        if(form.document_type === "other_deposit") return `આથી નમ્રતાપૂર્વક જણાવવાનું કે ${party || "પક્ષકાર"} ઉપરોક્ત કામ સંબંધે રૂ. ${val("amount")} (${val("amount_words")}) ની રકમ અદાલતમાં જમા કરાવવા માંગે છે. તેથી સદર રકમ જમા સ્વીકારવા વિનંતી છે.${special}`;
+        return `હાલ ની આ અરજી આપ સાહેબ શ્રી તરફ રજૂ કરી અમારી નમ્ર અરજ છે કે, ${val("body")}`;
+      }
+      if(form.document_type === "adjournment") return `It is to humbly inform your honor that, as the matter is placed on the stage of ${val("stage") || "the selected stage"}, we the ${party || "producing party"} side of the matter are to proceed with such stage. But since, ${val("reason") || "the stated reason"}, we cannot proceed with the matter today. Hence we humbly request for adjournment today.${special}`;
+      if(form.document_type === "exemption") return `It is to humbly inform your honor that, as the matter is placed on the stage of ${val("stage") || "the selected stage"}. But since, ${party || "the producing party"} cannot be present today before this Hon'ble Court due to ${val("reason") || "the stated reason"}, we humbly request for exemption today.${special}`;
+      if(form.document_type === "fine_deposit") return `It is to humbly inform your honor that, I the ${party || "producing party"} of the matter being directed by this Hon'ble Court to deposit an amount of Rs. ${val("amount")} (${val("amount_words")}) towards penalty / fine before this Court in connection to aforesaid matter. Hence I request your honour to kindly pass necessary order to admit the receipt of the said amount to the account of this Court.${special}`;
+      if(form.document_type === "dlsa_cost") return `It is to humbly inform your honor that, I the ${party || "producing party"} of the matter being directed by this Hon'ble Court to deposit an amount of Rs. ${val("amount")} (${val("amount_words")}) towards cost before the DLSA office attached to this Court. Hence I request your honour to kindly pass necessary order to admit the deposit to the account of DLSA, CJM Courts, Ahmedabad City.${special}`;
+      if(form.document_type === "surety_deposit") return `It is to humbly inform your honor that, as per the stage and proceedings of the matter, the applicant is required to furnish bail bond for Rs. ${val("amount")} (${val("amount_words")}) and surety of like amount. Since today the applicant is not in capacity to furnish surety, kindly accept the cash deposit against the said surety amount.${special}`;
+      if(form.document_type === "other_deposit") return `It is to humbly inform your honor that, I the ${party || "producing party"} of the matter wish to deposit an amount of Rs. ${val("amount")} (${val("amount_words")}) before this Court in connection to aforesaid matter. Hence I request your honour to kindly accept the said amount of deposit to the account of the Court.${special}`;
+      return `The present application is submitted before Your Honour with respectful submission that ${val("body")}`;
+    }
+
+    function pursisText(){
+      const party = partyText() || (lang === "gu" ? "રજૂ કરનાર પક્ષ" : "producing party");
+      const extra = form.body ? ` ${val("body")}` : "";
+      if(form.document_type === "police_bail"){
+        return lang === "gu"
+          ? `સદરહુ પુરસીસ આપ નામદાર સાહેબ શ્રી સમક્ષ અમો ${party}, દ્વારા રજૂ કરી જાહેર કરવાનું કે, ઉપરોક્ત વિષય અને મથાળે જણાવેલ ગુના સંબંધે રજૂ થયેલ ફરિયાદના કામે અમો નીચે સહી કરનાર સામે જે જામીન લાયક વોરંટ નામદાર ન્યાયાલય દ્વારા કાઢવામાં આવેલ હતું, તે જામીન લાયક વોરંટ અમારા ઉપર બજી ગયેલ છે. અને તે જામીન લાયક વોરંટમાં જણાવેલ રકમ અંગેના જાત મુચરકા તેમજ જામીન અમોએ સંબંધિત પોલીસ સ્ટેશન - ${val("police_station")} ખાતે આપેલા છે.${extra} જે અમો આ પુરસીસથી જાહેર કરીએ છીએ.`
+          : `It is declared that in the above matter the bailable warrant issued by this Hon'ble Court has been served upon the accused and the personal bond and surety for the amount mentioned in the bailable warrant have been furnished at Police Station - ${val("police_station")}.`;
+      }
+      if(form.document_type === "payment_declaration"){
+        return lang === "gu"
+          ? `આજ રોજ ઉપરોક્ત આરોપી અદાલત સમક્ષ હાજર રહી જાહેર કરે છે કે ઇન્સ્ટ્રુમેન્ટ / સૂચના અનાદર થયા બાદ ફરિયાદીને રૂ. ${val("amount")} (${val("amount_words")}) ની રકમ ચૂકવવામાં આવેલ છે.${extra} તેથી સદર જાહેરાત કેસ રેકર્ડમાં સ્વીકારવા વિનંતી છે.`
+          : `Today, I the aforesaid accused appeared before this Court and declare that I have made payment of Rs. ${val("amount")} (${val("amount_words")}) to the complainant after dishonour of the instrument / instructions.${extra} Kindly admit this declaration memo in the case record.`;
+      }
+      if(form.document_type === "case_papers"){
+        return lang === "gu"
+          ? `સદરહુ પુરસીસ આપ નામદાર સાહેબ શ્રી સમક્ષ અમો ${party}, દ્વારા રજૂ કરી જાહેર કરવાનું કે, ${extra || "અદાલત દ્વારા પસાર થયેલ હુકમની જાણ કરવામાં આવી છે, કેસ પેપર્સની નકલો પ્રાપ્ત થયેલ છે અને જામીન / બોન્ડ અંગેની જવાબદારી સમજાવવામાં આવી છે."} જે હકીકત અમો આ પુરસીસ થી જાહેર કરીએ છે.`
+          : `Today, I the aforesaid accused appeared before this Court and declare that I have been informed of the orders passed by this Court, received copies of case papers and understood the requirement regarding bail and bond / surety. Kindly admit this declaration memo in the case record.`;
+      }
+      if(["withdrawal","lok_adalat"].includes(form.document_type)){
+        if(lang === "gu"){
+          const lok = form.document_type === "lok_adalat" ? `વધુમાં, કેસના બંને પક્ષકારોએ શક્ય તેટલી વહેલી તકે પરસ્પર સમાધાન કરી લીધેલ હોવાથી, આ કેસને જરૂરી હુકમો માટે આગામી લોક અદાલતમાં મૂકવાની વિનંતી કરવામાં આવે છે. તેમજ, માનનીય ન્યાયાલયને નમ્ર વિનંતી કરવામાં આવે છે કે, કેસના સમાધાનને ધ્યાનમાં રાખી કાર્યવાહી સંબંધિત કોઈપણ અનુસંગિક ખર્ચ (Consequential Cost of Litigation) માંથી મુક્તિ આપવાની કૃપા કરશો. આ કારણસર પણ કેસને આગામી લોક અદાલતમાં મૂકવાની વિનંતી કરવામાં આવે છે.${extra}` : `આથી, માનનીય ન્યાયાલયને વિનંતી છે કે હાલની ફરિયાદ પરત ખેંચવાની પરવાનગી આપી, કાયદા મુજબ યોગ્ય હુકમ ફરમાવશો.${extra}`;
+          return `માનનીય ન્યાયાલય સમક્ષ નમ્ર રજૂઆત છે કે, આ કેસના ફરિયાદીએ આરોપી વિરુદ્ધ ${lawText()} હેઠળ ફરિયાદ દાખલ કરી હતી. પરંતુ, કાર્યવાહી દરમિયાન કેસના બંને પક્ષકારો વચ્ચે સૌહાર્દપૂર્ણ સમાધાન થઈ ગયેલ છે. ${disputedItem()} સામેની રકમ ફરિયાદી પક્ષને સંપૂર્ણ સંતોષકારક રીતે પ્રાપ્ત થઈ ગયેલ હોવાથી, હું/અમે ફરિયાદી પક્ષ તરફથી હાલની ફરિયાદ પરત ખેંચવા ઇચ્છીએ છીએ.\n${lok}\nવધુમાં રજૂ કરવાનું કે, આ પુરશીસ હું/અમે સ્વેચ્છાએ તથા કોઈપણ વ્યક્તિના દબાણ, બળજબરી અથવા અયોગ્ય પ્રભાવ વિના રજૂ કરી રહ્યા છીએ.`;
+        }
+        const lok = form.document_type === "lok_adalat" ? `Considering the fact that, the parties of the matter have settled the matter at the earliest possible opportunity, we request to place the matter in upcoming Lok Adalat for necessary orders. Also it is hereby requested that the Hon'ble Court may kindly exempt any consequential cost of litigation.${extra}` : `I request this Hon'ble Court to permit withdrawal of the complaint and pass appropriate order in accordance with law.${extra}`;
+        return `It is to humbly inform your honor that, the complainant of the matter has instituted a complaint under ${lawText()} against the accused of this matter. However, during the process, the parties to the matter have arrived at amicable settlement. Since I/we the complainant side have received the amount against the ${disputedItem()} to the full satisfaction, I/we wish to withdraw the present matter.\n${lok}\nFurther, the present pursis is being presented voluntarily and without any coercion or undue influence from any person.`;
+      }
+      if(form.document_type === "custom_pursis"){
+        return lang === "gu"
+          ? `સદરહુ પુરસીસ આપ નામદાર સાહેબ શ્રી સમક્ષ અમો ${party}, દ્વારા રજૂ કરી જાહેર કરવાનું કે, ${val("body")} જે હકીકત અમો આ પુરસીસ થી જાહેર કરીએ છે.`
+          : `The present pursis is submitted by ${party} before this Hon'ble Court to declare that ${val("body")}.`;
+      }
+      if(lang === "gu") return `${documentTitle()} સ્વેચ્છાએ તથા કોઇ દબાણ વિના રજૂ કરવામાં આવે છે.`;
+      return `The present ${documentTitle()} is submitted voluntarily and without coercion or undue influence.`;
+    }
+
+    function regularDoc(){
+      const c = courtBlock();
+      const isApp = kind === "application";
+      return `<div class="legal-doc ${lang==="gu"?"gu":""}">
+        <div class="court-head">${lang==="gu"?"મહે.":"IN THE COURT OF"} ${esc(c.court_name || "")}</div>
+        <div class="case-no-right">${lang==="gu"?"કેસ નં.":"Case No."} ${esc(caseNumberDisplay())}</div>
+        <div class="party-center">
+          <div>${lang==="gu"?"ફરિયાદી":"Complainant"}: ${val("complainant_name")}</div>
+          <div>${lang==="gu"?"વિરૂદ્ધ":"Versus"}</div>
+          <div>${lang==="gu"?"આરોપી":"Accused"}: ${val("accused_name")}</div>
+        </div>
+        ${subjectLine()}
+        ${form.law_selection ? `<p><strong>${lang==="gu"?"વંચાણે":"Read"}:</strong> ${lawText()}</p>` : ""}
+        <p>${lang==="gu"?"મહે. સાહેબ શ્રી,":"Hon'ble Sir / Madam,"}</p>
+        <p>${isApp ? applicationPrayer() : pursisText()}</p>
+        <p>${lang==="gu"?"આભાર સહ.":"With respectful submission."}</p>
+        <p>${lang==="gu"?"તારીખ":"Dt. -"} ${dateForLang(form.date)}</p>
+        <div class="signature-row" style="margin-top:44px">
+          <div>
+            <div class="signature-line">${lang==="gu"?"અરજદાર / રજૂ કરનારની સહી":"Signature of Applicant / Producing Party"}</div>
+            <p>${val("applicant_name")}</p>
+          </div>
+          ${advocateESignBlock()}
+        </div>
+      </div>`;
+    }
+
+    function suretyCertificateEn(){
+      return `<div class="legal-doc">
+        <h1>:: Certificate ::</h1>
+        <p><strong>Name of Accused:</strong> ${val("accused_name")}</p>
+        <p>I personally know the surety Mr./Ms./Mrs. ${val("surety_name")}, residing at ${val("surety_address")}. I personally know that the said surety possesses sufficient valuable immovable property for furnishing surety up to Rs. ${val("bond_amount")}/- for the accused.</p>
+        <p>I have personally verified and certify that the surety is fit, capable and solvent to furnish surety of Rs. ${val("bond_amount")}/- only.</p>
+        <div class="signature-row" style="margin-top:80px"><div>Date: ${val("date")}<br/>Place: Ahmedabad City</div><div class="signature-line">Advocate<br/>${val("advocate_name")}</div></div>
+      </div>`;
+    }
+
+    function suretyCertificateGu(){
+      return `<div class="legal-doc gu">
+        <h1>::પ્રમાણપત્ર::</h1>
+        <p>આરોપીનું નામ: ${val("accused_name")}</p>
+        <p>હું અંગત રીતે આરોપીના જામીનદાર શ્રી / સુ શ્રી / શ્રીમતિ ${val("surety_name")} ને ઓળખું છું, રહે. ${val("surety_address")}. મને અંગત રીતે જાણ છે કે તેઓ આરોપી માટે ₹. ${val("bond_amount")}/- સુધીની જામીનગીરી આપવા માટે પૂરતી મૂલ્યવાન સ્થાવર મિલકત ધરાવે છે.</p>
+        <p>મેં જાતે તપાસ કરી ખાતરી કરી છે કે તેઓ ₹. ${val("bond_amount")}/- માત્રની જામીનગીરી આપવા માટે યોગ્ય, સક્ષમ અને સધ્ધર (Solvent) છે.</p>
+        <div class="signature-row" style="margin-top:80px"><div>તારીખ: ${dateForLang(form.date)}<br/>સ્થળ: અમદાવાદ શહેર</div><div class="signature-line">વકીલ<br/>${val("advocate_name")}</div></div>
+      </div>`;
+    }
+
+    function yn(k){
+      return form[k] === (lang === "gu" ? "હા" : "Yes");
+    }
+    function rentedLine(){
+      if(form.residence_type === (lang === "gu" ? "ભાડાનું" : "Rented")){
+        return lang === "gu"
+          ? `હું અહી ભાડે થી રહું છું અને રકમ ₹. ${val("residence_rent")}/- ભાડું અદા કરૂ છું. ભાડાની રસીદ મારા નામે ${yn("residence_rent_receipt") ? "આવેલ છે" : "આવેલ નથી"}.`
+          : `I reside at the said address on rent and pay monthly rent of Rs. ${val("residence_rent")}/-. The rent receipt is ${yn("residence_rent_receipt") ? "" : "not "}in my name.`;
+      }
+      return lang === "gu" ? "અને મારૂ પોતાનું મકાન છે." : "The residence is my own house.";
+    }
+    function suretyBusinessGu(){
+      if(!yn("business_engaged")) return "અમો જામીનદાર ધંધો / વેપાર કરતા નથી.";
+      const place = form.business_place_type === "ભાડાનું"
+        ? `અમારો ધંધો ભાડે રાખેલ જગ્યા માં આવેલ છે અને અમો તેનું ₹. ${val("business_rent")}/- માસિક ભાડું અદા કરીએ છે. આ ભાડાની પાવતી અમારા નામે ${yn("business_rent_receipt") ? "આવેલ છે" : "આવેલ નથી"}.`
+        : "આ ધંધો અમારા માલિકી ની જગ્યા માં આવેલ છે.";
+      return `અમો ${val("business_name")} નામ થી ધંધો કરીએ છે અને મારા ધંધા નું સ્થળ ${val("business_address")} આવેલ છે. અમારો ${val("business_nature")} નો વ્યવસાય આવેલો છે. આ ધંધા માં અમારી ${val("business_share")} ની માલિકી આવેલ છે. ${place}`;
+    }
+    function suretyBusinessEn(){
+      if(!yn("business_engaged")) return "I am not engaged in business.";
+      const place = form.business_place_type === "Rented"
+        ? `The business premises are rented and I pay monthly rent of Rs. ${val("business_rent")}/-. The rent receipt is ${yn("business_rent_receipt") ? "" : "not "}in my name.`
+        : "The business premises are owned by me.";
+      return `I carry on business in the name of ${val("business_name")} at ${val("business_address")}. The nature of business is ${val("business_nature")} and my share / ownership is ${val("business_share")}. ${place}`;
+    }
+    function suretyServiceGu(){
+      if(!yn("service_engaged")) return "અમો જામીનદાર નોકરી કરતા નથી.";
+      return `અમો જામીનદાર ${val("employer_name")} નામે આવેલ સંસ્થામાં નોકરી કરીએ છે. તેનું સરનામું ${val("employer_address")} આવેલ છે. અમારો માસિક પગાર ભથ્થા સાથે ₹. ${val("service_salary")}/- નો છે. અને મારા પ્રોવીડન્ટ ફંડની રકમ ₹. ${val("provident_fund")}/- ની આવેલ છે.`;
+    }
+    function suretyServiceEn(){
+      if(!yn("service_engaged")) return "I am not engaged in service.";
+      return `I am employed with ${val("employer_name")} at ${val("employer_address")}. My monthly salary with allowances is Rs. ${val("service_salary")}/- and my provident fund amount is Rs. ${val("provident_fund")}/-.`;
+    }
+    function suretyPropertyGu(){
+      const charge = yn("property_charge") ? `આ મિલક્ત ઉપર ${val("property_charge_details")} નો હિત / બોજો આવેલ છે.` : "આ મિલક્ત ઉપર કોઇ બોજો અગર હિત આવેલ નથી.";
+      return `અમો જામીન ના નામે ${val("surety_property")} આવેલ છે. આ મિલક્તની હાલ બજાર કિંમત ₹. ${val("property_value")}/- ની રહેલ છે. આ મિલક્તમાં અમારો ${val("property_share")} નો ભાગ આવેલ છે. ${charge}`;
+    }
+    function suretyPropertyEn(){
+      const charge = yn("property_charge") ? `The property is subject to the following charge / encumbrance: ${val("property_charge_details")}.` : "The property is free from charge or encumbrance.";
+      return `The property standing in the surety's name is: ${val("surety_property")}. Its present market value is Rs. ${val("property_value")}/-. My share in the property is ${val("property_share")}. ${charge}`;
+    }
+    function suretyHistoryGu(){
+      const prior = yn("prior_surety") ? `અમો બીજી કોઇ ના જામીનદાર રહેલ છે. વિગત: ${val("prior_surety_details")}.` : "અમો બીજી કોઇ ના જામીનદાર રહેલ નથી.";
+      const forfeited = yn("surety_forfeited") ? `જામીનગીરી વસૂલ થયેલ છે. તેની વિગત: ${val("forfeiture_details")}.` : "અમારી જામીનગીરી કોઇ વખત વસૂલ થયેલ નથી.";
+      const rejected = yn("surety_application_rejected") ? `અમો જામીનદાર ની અગાઉ જામીન માટે ની અરજી રદ કરવામાં આવેલ છે. તેની વિગત એ મુજબ છે કે, ${val("rejection_details")}.` : "અમો જામીનદાર ની અગાઉ કોઇ જામીન માટે ની અરજી રદ કરવામાં આવેલ નથી.";
+      return `અમો જામીનદાર આરોપી ને ${val("accused_known_since")} સમય થી ઓળખી એ છે. આરોપી અમારા ${val("surety_relation_detail")} થાય છે. ${prior} ${forfeited} ${rejected}`;
+    }
+    function suretyHistoryEn(){
+      const prior = yn("prior_surety") ? `I have earlier acted as surety for another person. Details: ${val("prior_surety_details")}.` : "I have not acted as surety for any other person.";
+      const forfeited = yn("surety_forfeited") ? `My surety has been forfeited earlier. Details: ${val("forfeiture_details")}.` : "My surety has never been forfeited.";
+      const rejected = yn("surety_application_rejected") ? `My earlier surety application was rejected. Details: ${val("rejection_details")}.` : "No earlier application made by me to stand surety has been rejected.";
+      return `I know the accused since ${val("accused_known_since")}. The accused is known to me as ${val("surety_relation_detail")}. ${prior} ${forfeited} ${rejected}`;
+    }
+    function affidavitGu(){
+      return `<div class="legal-doc gu">
+        <p class="court-title">${courtHeading()}</p>
+        <div class="details-grid"><b>પોલીસ સ્ટેશન</b><span>: ${val("police_station")}</span><b>ગુના નોંધણી નં.</b><span>: ${val("cr_number")}</span><b>કાયદો અને કલમ</b><span>: ${lawText()}</span></div>
+        <p><strong>ફરિયાદી:</strong> ${val("complainant_name")}</p><p style="text-align:center">::વિરુદ્ધ::</p><p><strong>આરોપી:</strong> ${val("accused_name")}</p>
+        <p>હું ${val("surety_name")} પ્રતિજ્ઞા કરૂ છું કે, આરોપી ${val("accused_name")} નો જામીન રહેવા માગું છું અને મજકૂર આરોપી સામે ${lawText()}, મુજબ નો ગુનો દાખલ કરવા માં આવ્યો છે. અને તેના ₹. ${val("bond_amount")}/- ના જામીન ઉપર છોડવાનો હુકમ તા. ${dateForLang(form.bail_order_date || form.date)}, ના રોજ કરવા માં આવેલ છે.</p>
+        <p>મારા અંગે ની વિગતવાર માહિતી નીચે મુજબ ની રહેલ છે -</p>
+        <p><strong>જામીનનું નામ તથા સરનામું અને રહેઠાણ:</strong> ${val("surety_name")}, ${val("surety_address")}. હું અહી છેલ્લા ${val("residence_years")} થી રહું છું. ${rentedLine()}</p>
+        <p><strong>ધંધો અગર વહેપાર:</strong> ${suretyBusinessGu()}</p>
+        <p><strong>નોકરી:</strong> ${suretyServiceGu()}</p>
+        <p><strong>જામીન ની મિલક્ત:</strong> ${suretyPropertyGu()}</p>
+        <p><strong>આવકવેરા અને બેંક વિગત:</strong> અમારા છેલ્લા ત્રણ વર્ષ ના આવક વેરા ની વિગત ${val("income_tax_details")} મુજબ ની છે. હાલ અમારા બેંક ખાતા મા કુલ જમા રકમ ₹. ${val("bank_balance")}/- ની આવેલ છે.</p>
+        <p><strong>જામીનદારની ઓળખ અને અગાઉની જામીનગીરી:</strong> ${suretyHistoryGu()}</p>
+        <p>હું મારા ઉપર મુજબ ના કથનો ના સમર્થન મા નીચે મુજબ ના દસ્તાવેજો રજુ કરૂ છુ.</p>
+        <p>ઓળખ માટે નો પુરાવો : ${val("identity_proof")}<br/>જામીનદાર ની સધ્ધર્તા માટે નો પુરાવો : ${val("solvency_proof")}<br/>અન્ય પુરાવો : ${val("other_proof")}</p>
+        <p>આથી હુ અરજ કરૂ છું કે, ઉપર જણાવેલ આરોપી માટે અમારી જામીનદાર તરીકે રહેવા માટે ની હાલની અરજી મંજુર કરવા યોગ્ય હુક્મ કરશોજી.</p>
+        <p>આથી હું જામીનદાર સોગંધ ઉપર જાહેર કરૂ છુ કે, ઉપર જણાવેલ તમામ હકીકતો મારા જાણવા અને માનવા મુજબ સાચી અને ખરી છે. ખોટું સોગંધનામુ કરવું ગુનો બને છે, જે હુ કબુલ કરૂ છુ.</p>
+        <div class="signature-row"><div>સ્થળ - અમદાવાદ શહેર.<br/>તારીખ - ${dateForLang(form.date)}</div><div class="signature-line">જામીનદારની સહી<br/>${val("surety_name")}</div></div>
+      </div>`;
+    }
+
+    function affidavitEn(){
+      return `<div class="legal-doc">
+        <p class="court-title">${courtHeading()}</p>
+        <div class="details-grid"><b>Police Station</b><span>: ${val("police_station")}</span><b>Crime Registration No.</b><span>: ${val("cr_number")}</span><b>Law and Section</b><span>: ${lawText()}</span></div>
+        <p><strong>Complainant:</strong> ${val("complainant_name")}</p><p style="text-align:center">::Versus::</p><p><strong>Accused:</strong> ${val("accused_name")}</p>
+        <p>I, ${val("surety_name")}, state on solemn affirmation that I wish to stand as surety for accused ${val("accused_name")}. The offence mentioned against the accused is ${lawText()} and an order to release the accused on surety of Rs. ${val("bond_amount")}/- was passed on ${esc(form.bail_order_date || form.date)}.</p>
+        <p>My detailed information is as follows:</p>
+        <p><strong>Name, address and residence:</strong> ${val("surety_name")}, ${val("surety_address")}. I have been residing at this address for ${val("residence_years")}. ${rentedLine()}</p>
+        <p><strong>Business:</strong> ${suretyBusinessEn()}</p>
+        <p><strong>Service:</strong> ${suretyServiceEn()}</p>
+        <p><strong>Property:</strong> ${suretyPropertyEn()}</p>
+        <p><strong>Income tax and bank:</strong> My last three years income tax return details are ${val("income_tax_details")}. The total amount standing in my bank accounts is Rs. ${val("bank_balance")}/-.</p>
+        <p><strong>Identification and previous surety:</strong> ${suretyHistoryEn()}</p>
+        <p>I produce the following documents in support of the above statements.</p>
+        <p>Identity proof: ${val("identity_proof")}<br/>Proof of solvency of surety: ${val("solvency_proof")}<br/>Other proof: ${val("other_proof")}</p>
+        <p>I therefore request that my present application to stand as surety for the above accused may kindly be allowed.</p>
+        <p>I declare on oath that all the above facts are true and correct to my knowledge and belief. I understand that making a false affidavit is an offence.</p>
+        <div class="signature-row"><div>Place - Ahmedabad City.<br/>Date - ${val("date")}</div><div class="signature-line">Signature of Surety<br/>${val("surety_name")}</div></div>
+      </div>`;
+    }
+
+    function personalBondDoc(){
+      const dateLine = dateForLang(form.date || today());
+      const withConditions = form.personal_bond_condition_mode === "with";
+      const conditionHtml = withConditions ? selectedConditionLines("accused") : [];
+      const conditions = conditionHtml.length ? `<ol>${conditionHtml.map(line => `<li>${esc(line)}</li>`).join("")}</ol>` : "";
+      if(lang === "gu"){
+        return `<div class="legal-doc gu bond-page">
+          <p class="court-title">${courtHeading()}</p>
+          <p>${val("police_station")} પો. સ્ટે. ગુ. ર. નં. ${val("cr_number")}</p>
+          <p>ફો. કે. નં. ${esc(caseNumberDisplay())}</p>
+          <p>આરોપી નું નામ - ${val("accused_name")}<br/>આરોપી નુ સરનામુ - ${val("accused_address")}<br/>આરોપી નુ ચાલુ હોય તેવુ મો. નં. - +૯૧-${val("accused_contact")}</p>
+          <p>હું ${val("accused_name")} નો રહે. ${val("accused_address")} ના ગુનાનુ તહોમત મારી ઉપર મુકીને ${courtHeading()} આગળ લાવી ને તેમની અથવા સબબ તહોમત ના કામે બીજી કોઇ પણ મહે. અદાલત પ્રથમ સુનાવણી કરે તેવી અદાલતમાં તથા જરૂર પડે તો મહે. જીલ્લા વ સત્ર અદાલતમાં હાજર થવા સારૂં તારણ આપવાનુ ${withConditions ? "(નીચે જણાવેલ શરતો સહ) " : ""}મને ફરમાવ્યા ઉપરથી બંધાઉ છું કે, સદરહુ મહે. મેજીસ્ટ્રેટ સાહેબની અદલતમાં અથવા સદરહુ તહોમતની જે કોઇ પણ બીજી પ્રથમ સુનાવણી કરે તેવી અદલતમાં સુનાવણી ચાલે ત્યા સુધી દરરોજ હાજર રહીશ અને જો મુકદમો મહે. જીલ્લા વ સત્ર ન્યાયાલય તરફ ઇન્સાફી કાર્યવાહી માટે મોકલવામાં આવે તો મારી ઉપર મુકેલા તહોમતનો જવાબ દેવાને ફરમાવવામાં આવે ત્યારે સદરહુ નામ. અદાલતની આગળ હુ હાજર હોઇશ અને હાજર થઈશ ${withConditions ? "અને જણાવેલ શરતો નુ ચુસ્ત પણે પાલણ કરીશ " : ""}અને બાબતમાં જો કસુર કરૂ તો હુ બંધાઉ છું કે સરકાર ને ₹ ${val("bond_amount")}/- રકમ મારે ગુનેગારીમાં / કસુર બદલ આપવી રહેશે.</p>
+          <p>તા. ${dateLine}.<br/>સ્થળ - અમદાવાદ શહેર.</p>${conditions}
+          <div class="signature-row" style="margin-top:60px"><div class="signature-line">આરોપીની સહી<br/>${val("accused_name")}</div><div>મારી રૂબરૂ<br/>${judicialSignatureBlock()}</div></div>
+          <div class="signature-row" style="margin-top:34px"><div class="signature-line">ઓળખ આપનાર ની સહી</div><div></div></div>
+        </div>`;
+      }
+      return `<div class="legal-doc bond-page">
+        <p class="court-title">${courtHeading()}</p>
+        <p>${val("police_station")} Police Station C.R. No. ${val("cr_number")}</p>
+        <p>Case No. ${esc(caseNumberDisplay())}</p>
+        <p>Accused Name - ${val("accused_name")}<br/>Accused Address - ${val("accused_address")}<br/>Accused Mobile No. - +91-${val("accused_contact")}</p>
+        <p>I, ${val("accused_name")}, residing at ${val("accused_address")}, having been brought before ${courtHeading()} in connection with ${lawText()}, bind myself to remain present before this Court or any other competent Court on every date of hearing and whenever directed${withConditions ? " while complying with the conditions stated below" : ""}. If the matter is committed or sent to any competent Court for trial or further proceedings, I shall remain present before such Court to answer the accusation against me. In default, I bind myself to pay Rs. ${val("bond_amount")}/- to the Government for such default.</p>
+        <p>Date: ${dateLine}.<br/>Place - Ahmedabad City.</p>${conditions}
+        <div class="signature-row" style="margin-top:60px"><div class="signature-line">Signature of Accused<br/>${val("accused_name")}</div><div>Before me<br/>${judicialSignatureBlock()}</div></div>
+        <div class="signature-row" style="margin-top:34px"><div class="signature-line">Signature of Identifier</div><div></div></div>
+      </div>`;
+    }
+
+    function bondDoc(){
+      const is389 = form.document_type === "surety_389";
+      const hasBondConditions = form.document_type !== "surety_no_conditions";
+      const accusedRole = is389 ? "convict" : "accused";
+      const accusedTitleGu = is389 ? "સજા પછી કલમ ૩૮૯ હેઠળ - સોગંદનામું, પ્રમાણપત્ર અને બોન્ડ" : (hasBondConditions ? "સોગંદનામું, પ્રમાણપત્ર અને શરતો સાથે નું બોન્ડ" : "સોગંદનામું, પ્રમાણપત્ર અને શરતો વગર બોન્ડ");
+      const accusedTitleEn = is389 ? "Bond under Section 389 after conviction" : (hasBondConditions ? "Bond with conditions" : "Bond without conditions");
+      const partyGu = is389 ? "દોષિત" : "આરોપી";
+      const partyEn = is389 ? "Convict" : "Accused";
+      const dateLine = dateForLang(form.date || today());
+      const conditions = (role) => {
+        if(!hasBondConditions) return "";
+        const lines = selectedConditionLines(role);
+        return lines.length ? `<ol>${lines.map(line => `<li>${esc(line)}</li>`).join("")}</ol>` : "";
+      };
+      const guAccusedIntro = is389
+        ? `હું ${val("accused_name")} નો રહે. (${val("accused_address")}) ના ગુનાનુ તહોમત મારી ઉપર મુકીને ${courtHeading()} આગળ લાવી ને તેમની અથવા સબબ તહોમત ના કામે બીજી કોઇ પણ મહે. અદાલત પ્રથમ સુનાવણી કરે તેવી અદાલતમાં તથા જરૂર પડે તો મહે. જીલ્લા વ સત્ર અદાલતમાં હાજર થવા સારૂં તારણ આપવાનુ (નીચે જણાવેલ શરતો સહ) મને ફરમાવ્યા ઉપરથી બંધાઉ છું કે, સદરહુ મહે. મેજીસ્ટ્રેટ સાહેબની અદલતમાં અથવા સદરહુ તહોમતની જે કોઇ પણ બીજી સુનાવણી કરે તેવી અદલતમાં સુનાવણી ચાલે ત્યા સુધી દરરોજ હાજર રહીશ અને જો મુકદમો મહે. જીલ્લા વ સત્ર ન્યાયાલય તરફ ઇન્સાફી કાર્યવાહી માટે રજૂ કરવા માં આવે તો મારી ઉપર મુકેલા તહોમતનો જવાબ દેવાને ફરમાવવામાં આવે ત્યારે સદરહુ નામ. અદાલતની આગળ હુ હાજર હોઇશ અને હાજર થઈશ (અને જણાવેલ શરતો નુ ચુસ્ત પણે પાલણ કરીશ) અને બાબતમાં જો કસુર કરૂ તો હુ બંધાઉ છું કે સરકાર ને રૂ. ${val("bond_amount")}/- મારે ગુનેગારીમાં / કસુર બદલ આપવી રહેશે.`
+        : `હું ${val("accused_name")} નો રહે. (${val("accused_address")}) ના ગુનાનુ તહોમત મારી ઉપર મુકીને ${courtHeading()} આગળ લાવી ને તેમની અથવા સબબ તહોમત ના કામે બીજી કોઇ પણ મહે. અદાલત પ્રથમ સુનાવણી કરે તેવી અદાલતમાં તથા જરૂર પડે તો મહે. જીલ્લા વ સત્ર અદાલતમાં હાજર થવા સારૂં તારણ આપવાનુ (નીચે જણાવેલ શરતો સહ) મને ફરમાવ્યા ઉપરથી બંધાઉ છું કે, સદરહુ મહે. મેજીસ્ટ્રેટ સાહેબની અદલતમાં અથવા સદરહુ તહોમતની જે કોઇ પણ બીજી પ્રથમ સુનાવણી કરે તેવી અદલતમાં સુનાવણી ચાલે ત્યા સુધી દરરોજ હાજર રહીશ અને જો મુકદમો મહે. જીલ્લા વ સત્ર ન્યાયાલય તરફ ઇન્સાફી કાર્યવાહી માટે મોકલવામાં આવે તો મારી ઉપર મુકેલા તહોમતનો જવાબ દેવાને ફરમાવવામાં આવે ત્યારે સદરહુ નામ. અદાલતની આગળ હુ હાજર હોઇશ અને હાજર થઈશ (અને જણાવેલ શરતો નુ ચુસ્ત પણે પાલણ કરીશ) અને બાબતમાં જો કસુર કરૂ તો હુ બંધાઉ છું કે સરકાર ને રૂ. ${val("bond_amount")}/- મારે ગુનેગારીમાં / કસુર બદલ આપવી રહેશે.`;
+      const guSuretyIntro = is389
+        ? `આ ઉપરથી હું એકરાર કરૂ છું (અથવા દરેક જણા એકઠા તથા જુદા જુદા એકરાર કરીએ છીએ) કે, સદરહુ ${val("accused_name")} ના હુ જામીન થાઉ છું (અથવા અમો જામીન થઈએ છીએ) સદરહુ દોષિત/ઓ ઉપર જે ગુનાનુ તહોમત મુક્યુ છે તે ગુનાની પ્રથમ સુનાવણી ચાલે ત્યા સુધી દરરોજ ${courtHeading()} આગળ લાવી ને તેમની અથવા સબબ તહોમત ના કામે બીજી કોઇ પણ મહે. અદાલત પ્રથમ સુનાવણી કરે તેવી અદાલતમાં તથા જરૂર પડે તો મહે. જીલ્લા વ સત્ર અદાલત ની પાસે ઇન્સાફ થવા સારૂ રજૂ કરવા માં આવે તો તેની ઉપર મુકેલા તઓમતનો જવાબ દેવાને તે સદરહુ મહે. અદાલત આગળ હાજર હશે તથા હાજર થશે અને આ બાબતમાં જો કસુર કરે તો હુ બંધાઉ છું (અથવા અમો બંધાઇએ છીએ) કે સરકાર ને રૂ. ${val("bond_amount")}/- મારે ગુનેગારીમાં / કસુર બદલ આપવી રહેશે.`
+        : `આ ઉપરથી હું એકરાર કરૂ છું (અથવા દરેક જણા એકઠા તથા જુદા જુદા એકરાર કરીએ છીએ) કે, સદરહુ ${val("accused_name")} ના હુ જામીન થાઉ છું (અથવા અમો જામીન થઈએ છીએ) સદરહુ આરોપી ઉપર જે ગુનાનુ તહોમત મુક્યુ છે તે ગુનાની પ્રથમ સુનાવણી ચાલે ત્યા સુધી દરરોજ ${courtHeading()} આગળ લાવી ને તેમની અથવા સબબ તહોમત ના કામે બીજી કોઇ પણ મહે. અદાલત પ્રથમ સુનાવણી કરે તેવી અદાલતમાં તથા જરૂર પડે તો મહે. જીલ્લા વ સત્ર અદાલત ની પાસે ઇન્સાફ થવા સારૂ મોકલવામાં આવે તો તેની ઉપર મુકેલા તઓમતનો જવાબ દેવાને તે સદરહુ મહે. અદાલત આગળ હાજર હશે તથા હાજર થશે અને આ બાબતમાં જો કસુર કરે તો હુ બંધાઉ છું (અથવા અમો બંધાઇએ છીએ) કે સરકાર ને રૂ. ${val("bond_amount")}/- મારે ગુનેગારીમાં / કસુર બદલ આપવી રહેશે.`;
+      if(lang === "gu"){
+        return `<div class="legal-doc gu bond-page">
+          <h1>${accusedTitleGu}</h1><p class="court-title">${courtHeading()}</p>
+          <p>${is389 ? "ગુનો" : "પોલીસ સ્ટેશન"} - ${is389 ? lawText() : `${val("police_station")} ${val("cr_number")}`}</p><p>કેસ નંબર - ${esc(caseNumberDisplay())}</p>
+          <p>${partyGu} નું નામ - ${val("accused_name")}<br/>${partyGu} નુ સરનામુ - ${val("accused_address")}<br/>${partyGu} નુ ચાલુ હોય તેવુ મો. નં. - +૯૧-${val("accused_contact")}</p>
+          <p>${guAccusedIntro}</p><p>તા. ${dateLine}<br/>સ્થળ - અમદાવાદ શહેર.</p>${conditions(accusedRole)}
+          <div class="signature-row" style="margin-top:60px"><div class="signature-line">${partyGu}ની સહી<br/>${val("accused_name")}</div>${judicialSignatureBlock()}</div>
+        </div><div class="legal-doc gu bond-page">
+          <h1>${is389 ? "સોગંદનામું, પ્રમાણપત્ર અને બોન્ડ" : (hasBondConditions ? "સોગંદનામું, પ્રમાણપત્ર અને શરતો સાથે નું બોન્ડ" : "સોગંદનામું, પ્રમાણપત્ર અને શરતો વગર બોન્ડ")}</h1><p class="court-title">${courtHeading()}</p>
+          <p>${is389 ? "ગુનો" : "પોલીસ સ્ટેશન"} - ${is389 ? lawText() : `${val("police_station")} ${val("cr_number")}`}</p><p>કેસ નંબર - ${esc(caseNumberDisplay())}</p>
+          <p>જામીનદાર નું નામ - ${val("surety_name")}<br/>જામીનદાર નુ સરનામુ - ${val("surety_address")}<br/>જામીનદાર નુ ચાલુ હોય તેવુ મો. નં. - +૯૧-${val("surety_mobile")}</p>
+          <p>${guSuretyIntro}</p><p>તા. ${dateLine}<br/>સ્થળ - અમદાવાદ શહેર.</p>${conditions("surety")}
+          <div class="signature-row" style="margin-top:60px"><div class="signature-line">જામીનદારની સહી<br/>${val("surety_name")}</div>${judicialSignatureBlock()}</div>
+        </div>`;
+      }
+      return `<div class="legal-doc bond-page">
+        <h1>${accusedTitleEn}</h1><p class="court-title">${courtHeading()}</p>
+        <p>${is389 ? "Offence" : "Police Station"} - ${is389 ? lawText() : `${val("police_station")} ${val("cr_number")}`}</p><p>Case Number - ${esc(caseNumberDisplay())}</p>
+        <p>${partyEn} Name - ${val("accused_name")}<br/>${partyEn} Address - ${val("accused_address")}<br/>${partyEn} Mobile No. - +91-${val("accused_contact")}</p>
+        <p>I, ${val("accused_name")}, residing at ${val("accused_address")}, bind myself to remain present before ${courtHeading()} and any other competent Court as required in the matter concerning ${lawText()}, and if I default, I bind myself to pay Rs. ${val("bond_amount")}/- to the Government for such default.</p><p>Date: ${dateLine}<br/>Place: Ahmedabad City.</p>${conditions(accusedRole)}
+        <div class="signature-row" style="margin-top:60px"><div class="signature-line">Signature of ${partyEn}<br/>${val("accused_name")}</div>${judicialSignatureBlock()}</div>
+      </div><div class="legal-doc bond-page">
+        <h1>Bond of Surety</h1><p class="court-title">${courtHeading()}</p>
+        <p>${is389 ? "Offence" : "Police Station"} - ${is389 ? lawText() : `${val("police_station")} ${val("cr_number")}`}</p><p>Case Number - ${esc(caseNumberDisplay())}</p>
+        <p>Surety Name - ${val("surety_name")}<br/>Surety Address - ${val("surety_address")}<br/>Surety Mobile No. - +91-${val("surety_mobile")}</p>
+        <p>I, ${val("surety_name")}, stand surety for ${val("accused_name")} and bind myself to cause his presence before ${courtHeading()} or any other competent Court as required. If the accused / convict defaults, I bind myself to pay Rs. ${val("bond_amount")}/- to the Government for such default.</p><p>Date: ${dateLine}<br/>Place: Ahmedabad City.</p>${conditions("surety")}
+        <div class="signature-row" style="margin-top:60px"><div class="signature-line">Signature of Surety<br/>${val("surety_name")}</div>${judicialSignatureBlock()}</div>
+      </div>`;
+    }
+
+    function suretyPacket(){
+      if(form.document_type === "personal_bond_accused") return personalBondDoc();
+      if(lang === "gu") return affidavitGu() + suretyCertificateGu() + bondDoc();
+      return affidavitEn() + suretyCertificateEn() + bondDoc();
+    }
+
+    function conditionRole(){
+      return form.document_type === "surety_389" ? "convict" : "accused";
+    }
+
+    function conditionRoles(){
+      if(form.document_type === "personal_bond_accused") return ["accused"];
+      return form.document_type === "surety_389" ? ["convict","surety"] : ["accused","surety"];
+    }
+
+    function roleTitle(role){
+      if(lang === "gu"){
+        if(role === "accused") return "આરોપી";
+        if(role === "convict") return "દોષિત";
+        return "જામીનદાર";
+      }
+      if(role === "accused") return "Accused";
+      if(role === "convict") return "Convict";
+      return "Surety";
+    }
+
+    function roleConditionKey(role){
+      return role === "surety" && form.document_type === "surety_389" ? "convictSurety" : role;
+    }
+
+    function conditionState(){
+      if(!form.bond_conditions_by_role || Array.isArray(form.bond_conditions_by_role)) form.bond_conditions_by_role = {};
+      return form.bond_conditions_by_role;
+    }
+
+    function defaultConditionIdsFor(role){
+      const key = roleConditionKey(role);
+      return bondConditionOptions.filter(c => c[key] && c[key][lang]).map(c => c.id);
+    }
+
+    function renderConditionStep(){
+      if(!Array.isArray(form.custom_conditions)) form.custom_conditions = [];
+      q("#condition-heading").textContent = lang === "gu" ? "બોન્ડની શરતો" : "Bond Conditions";
+      const remaining = conditionRoles().filter(role => !conditionDoneRoles.includes(role));
+      if(!activeConditionRole){
+        q("#condition-help").textContent = lang === "gu" ? "સૌ પ્રથમ કોના બોન્ડ માટે શરતો તૈયાર કરવી છે તે પસંદ કરો." : "First select whose bond conditions should be prepared.";
+        q("#add-condition-btn").style.display = "none";
+        q("#condition-list").innerHTML = `<div class="condition-role-grid">${remaining.map(role => `<button type="button" class="condition-role-btn" onclick="selectConditionRole('${role}')">${roleTitle(role)}</button>`).join("")}</div>`;
+        showStep("condition-step");
+        return;
+      }
+      q("#add-condition-btn").style.display = "";
+      const state = conditionState();
+      if(!Array.isArray(state[activeConditionRole])) state[activeConditionRole] = defaultConditionIdsFor(activeConditionRole);
+      const selected = new Set(state[activeConditionRole]);
+      const key = roleConditionKey(activeConditionRole);
+      q("#condition-help").textContent = (lang === "gu" ? "હાલ પસંદ કરેલ બોન્ડ: " : "Current bond: ") + roleTitle(activeConditionRole);
+      q("#condition-list").innerHTML = bondConditionOptions.filter(c => c[key] && c[key][lang]).map(c => `
+        <label class="condition-card" style="grid-column:1 / -1"><input type="checkbox" data-condition="${c.id}" ${selected.has(c.id)?"checked":""} /><span>${esc(renderConditionText(c[key][lang]))}</span></label>
+      `).join("") + `<div class="condition-add-box">
+        <label>${lang === "gu" ? "વધારાની શરત" : "Additional condition"}</label>
+        <div class="voice-wrap"><textarea id="custom-condition-text" placeholder="${lang === "gu" ? "જરૂર હોય તો વધારાની શરત લખો" : "Type additional condition if required"}"></textarea><button type="button" class="btn mic-btn" data-mic-custom="custom-condition-text" title="Voice typing" aria-label="Voice typing"></button><span class="voice-status" data-voice-status-custom="custom-condition-text"></span></div>
+        <button type="button" class="btn btn-outline" style="margin-top:8px" onclick="addCustomConditionFromBox()">${lang === "gu" ? "શરત ઉમેરો" : "Add Condition"}</button>
+      </div>` + (form.custom_conditions || []).filter(c => c.person === activeConditionRole).map((c,i) => `
+        <label>${roleTitle(c.person)}</label><div>${esc(c.text)} <button type="button" class="btn btn-danger" onclick="removeCustomCondition(${i})">Delete</button></div>
+      `).join("");
+      document.querySelectorAll("[data-condition]").forEach(cb => {
+        cb.onchange = () => {
+          const set = new Set(conditionState()[activeConditionRole] || []);
+          cb.checked ? set.add(cb.dataset.condition) : set.delete(cb.dataset.condition);
+          conditionState()[activeConditionRole] = Array.from(set);
+          saveDraft();
+        };
+      });
+      document.querySelectorAll("[data-mic-custom]").forEach(btn => {
+        btn.onmousedown = e => e.preventDefault();
+        btn.onclick = () => toggleCustomVoice(btn.dataset.micCustom);
+      });
+      showStep("condition-step");
+    }
+
+    function selectConditionRole(role){
+      activeConditionRole = role;
+      renderConditionStep();
+    }
+
+    function advanceConditionStep(){
+      if(!activeConditionRole){ return; }
+      if(!conditionDoneRoles.includes(activeConditionRole)) conditionDoneRoles.push(activeConditionRole);
+      const next = conditionRoles().find(role => !conditionDoneRoles.includes(role));
+      if(next){
+        activeConditionRole = next;
+        renderConditionStep();
+        return;
+      }
+      activeConditionRole = "";
+      conditionDoneRoles = [];
+      previewDoc(true);
+    }
+
+    function addCustomCondition(){
+      addCustomConditionFromBox();
+    }
+
+    function addCustomConditionFromBox(){
+      const box = q("#custom-condition-text");
+      const text = box ? box.value.trim() : "";
+      if(!text || !activeConditionRole) return;
+      form.custom_conditions = [...(form.custom_conditions || []), { person: activeConditionRole, text }];
+      if(box) box.value = "";
+      saveDraft();
+      renderConditionStep();
+    }
+
+    function removeCustomCondition(index){
+      form.custom_conditions = (form.custom_conditions || []).filter((_, i) => i !== index);
+      saveDraft();
+      renderConditionStep();
+    }
+
+    function selectedConditionLines(person){
+      const role = String(person || "").toLowerCase();
+      const baseRole = role.includes("surety") ? "surety" : role.includes("convict") ? "convict" : "accused";
+      const selected = new Set((conditionState()[baseRole] || defaultConditionIdsFor(baseRole)));
+      const key = roleConditionKey(baseRole);
+      const lines = bondConditionOptions.filter(c => selected.has(c.id) && c[key] && c[key][lang]).map(c => renderConditionText(c[key][lang]));
+      for(const c of (form.custom_conditions || [])){
+        const p = String(c.person || "").toLowerCase();
+        if((baseRole === "accused" && p.includes("accused")) || (baseRole === "surety" && p.includes("surety")) || (baseRole === "convict" && p.includes("convict"))) lines.push(c.text);
+      }
+      return lines;
+    }
+
+    function renderConditionText(text){
+      return String(text || "").replaceAll("__ACCUSED_CONTACT__", val("accused_contact") || val("contact") || val("surety_mobile") || "................");
+    }
+
+    function motherTongueKey(){
+      return `acjm_doc_generator_mother_tongue:${kind}:${lang}`;
+    }
+
+    function setupMotherTonguePanel(){
+      const panel = q("#mother-tongue-panel");
+      if(!panel) return;
+      panel.style.display = "none";
+      if(kind !== "surety") return;
+      panel.style.display = "";
+    }
+
+    function selectedMotherTongue(){
+      const code = form.mother_tongue || "";
+      return motherTongues.find(l => l.code === code) || null;
+    }
+
+    function guToDevanagari(text){
+      return String(text || "").replace(/[\u0A81-\u0AFF]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x180));
+    }
+
+    function applyMarathiLegalPhrases(text){
+      const replacements = [
+        ["आ जणावेल आरोपी नुं", "वरील आरोपीचे"], ["फो. का. संहिता", "फौजदारी प्रक्रिया संहिता"],
+        ["नी कलम", "चे कलम"], ["हेठळ नुं विशेष निवेदन", "अंतर्गत विशेष निवेदन"],
+        ["प्रश्न-उत्तर स्वरूप मां", "प्रश्न-उत्तर स्वरूपात"], ["आरोपी नुं नाव", "आरोपीचे नाव"],
+        ["आरोपी नुं सरनामुं", "आरोपीचा पत्ता"], ["आरोपी नुं सरनामु", "आरोपीचा पत्ता"],
+        ["शुं तमने तमाम प्रकरण कागळो प्राप्त थई गयेला छे?", "तुम्हाला सर्व प्रकरणातील कागदपत्रे प्राप्त झाली आहेत का?"],
+        ["ते बाबते तमारे शुं कहे छे?", "त्या बाबत तुम्हाला काय सांगायचे आहे?"],
+        ["सोगंदनावां जणावेल तमाम हकीकतो खोटी छे.", "शपथपत्रात नमूद सर्व हकीकती खोट्या आहेत."],
+        ["तमो आरोपी ने पोताना बचाव मां विशेष मां कांइ कहे छे?", "तुम्हाला तुमच्या बचावाबाबत आणखी काही सांगायचे आहे का?"],
+        ["अमे वधाराना साक्षी तपासशुं अने आ अंगे उत्तर आपशु.", "आम्ही अतिरिक्त साक्षीदार तपासू आणि याबाबत उत्तर देऊ."],
+        ["वांची संभळावता ते बराबर अने साचं तथा खरू होवानुं कबूले छे.", "वाचून दाखविल्यावर ते बरोबर, सत्य व खरे असल्याचे मान्य केले."],
+        ["आरोपी पक्ष नी सही", "आरोपीची सही"], ["ओळख आपनार नी सही", "ओळख देणाऱ्याची सही"],
+        ["मारी रूबरू", "माझ्या समक्ष"], ["स्थळ", "ठिकाण"], ["अमदावाद शहर", "अहमदाबाद शहर"],
+        ["अमदावाद", "अहमदाबाद"], ["नुं", "चे"], ["नी", "ची"], ["ना", "चे"], ["मां", "मध्ये"],
+        ["माटे", "साठी"], ["तरफे", "कडून"], ["छे", "आहे"], ["तमे", "तुम्ही"], ["तमो", "तुम्ही"],
+        ["शुं", "काय"], ["फरियाद", "तक्रार"], ["फरियादी", "तक्रारदार"], ["हकीकतो", "हकीकती"]
+      ];
+      let next = String(text || "");
+      replacements.forEach(([from, to]) => { next = next.split(from).join(to); });
+      return next;
+    }
+
+    function applyMarathiTerms(text){
+      const pairs = [
+        ["ફરીયાદી", "तक्रारदार"], ["ફરિયાદી", "तक्रारदार"], ["આરોપી", "आरोपी"],
+        ["દોષિત", "दोषी"], ["જામીનદાર", "जामीनदार"], ["જામીન", "जामीन"],
+        ["નામ", "नाव"], ["ઉમર", "वय"], ["જાતિ", "जात"], ["ધંધો", "व्यवसाय"],
+        ["સરનામું", "पत्ता"], ["સરનામુ", "पत्ता"], ["તારીખ", "दिनांक"],
+        ["પ્રશ્ન", "प्रश्न"], ["જવાબ", "उत्तर"], ["અદાલત", "न्यायालय"],
+        ["કોર્ટ", "न्यायालय"], ["હાજર", "हजर"], ["સહી", "सही"],
+        ["રકમ", "रक्कम"], ["કેસ", "प्रकरण"], ["કલમ", "कलम"], ["બોન્ડ", "बॉण्ड"]
+      ];
+      let next = String(text || "");
+      pairs.forEach(([from, to]) => { next = next.split(from).join(to); });
+      next = guToDevanagari(next);
+      next = applyMarathiLegalPhrases(next);
+      const englishPairs = [
+        [/\bCourt\b/g, "न्यायालय"], [/\bCase\b/g, "प्रकरण"], [/\bComplainant\b/g, "तक्रारदार"],
+        [/\bAccused\b/g, "आरोपी"], [/\bConvict\b/g, "दोषी"], [/\bSurety\b/g, "जामीनदार"],
+        [/\bQuestion\b/g, "प्रश्न"], [/\bAnswer\b/g, "उत्तर"], [/\bDate\b/g, "दिनांक"],
+        [/\bName\b/g, "नाव"], [/\bSignature\b/g, "सही"], [/\bBond\b/g, "बॉण्ड"]
+      ];
+      englishPairs.forEach(([from, to]) => { next = next.replace(from, to); });
+      return next;
+    }
+
+    function translateText(text, code){
+      if(window.ACJM_TRANSLATION_ENGINE?.translateText && window.ACJM_TRANSLATION_ENGINE.isSupported(code)) {
+        return window.ACJM_TRANSLATION_ENGINE.translateText(text, code, {formType:kind, fieldType:"line"});
+      }
+      if(code === "mr") return applyMarathiTerms(text);
+      return text;
+    }
+
+    function hasAutomaticLegalTranslation(code){
+      return Boolean(window.ACJM_TRANSLATION_ENGINE?.isSupported?.(code)) || code === "mr";
+    }
+
+    function printableTranslationLines(code){
+      const wrap = q("#print-wrap");
+      const clone = wrap.cloneNode(true);
+      clone.querySelectorAll("[data-translation-annex='1'],.no-print,button").forEach(node => node.remove());
+      const lines = [];
+      clone.querySelectorAll("tr").forEach(row => {
+        const rowText = Array.from(row.cells || []).map(cell => (cell.innerText || "").trim()).filter(Boolean).join(" ");
+        if(rowText) lines.push(rowText);
+        row.remove();
+      });
+      clone.querySelectorAll("h1,h2,h3,p,li,.signature-row div,div").forEach(node => {
+        if(node.querySelector("table,tr")) return;
+        const text = (node.innerText || "").trim();
+        if(text && !lines.includes(text)) lines.push(text);
+      });
+      if(!lines.length) lines.push(...(clone.innerText || "").split(/\n+/));
+      return lines.map(line => translateText(line.trim(), code)).filter(Boolean);
+    }
+
+    function legalReviewAnnexHtml(meta, sourceLanguage){
+      return "";
+    }
+
+    function translatedAnnexHtml(){
+      const meta = selectedMotherTongue();
+      if(!meta || ["en","gu"].includes(meta.code)) return "";
+      const sourceLanguage = lang === "gu" ? "Gujarati" : "English";
+      if(window.ACJM_TRANSLATION_ENGINE?.annexHtml && window.ACJM_TRANSLATION_ENGINE.isSupported(meta.code)){
+        return window.ACJM_TRANSLATION_ENGINE.annexHtml(q("#print-wrap"), meta.code, {sourceLanguage, className:"legal-doc translation-annex", formType:kind});
+      }
+      if(!hasAutomaticLegalTranslation(meta.code)) return "";
+      const title = meta.code === "mr" ? "मराठी अनुवादित प्रत" : `Additional Translated Copy - ${esc(meta.name)}`;
+      const lines = printableTranslationLines(meta.code);
+      const motherLabel = meta.code === "mr" ? "निवडलेली मातृभाषा" : "Mother tongue selected";
+      const scriptLabel = meta.code === "mr" ? "लिपी" : "Script";
+      const sourceLabel = meta.code === "mr" ? "मूळ न्यायालयीन प्रतीची भाषा" : "Original court copy language";
+      const sourceName = meta.code === "mr" && sourceLanguage === "Gujarati" ? "गुजराती" : sourceLanguage;
+      return `<div class="legal-doc translation-annex" data-translation-annex="1">
+        <h2>${title}</h2>
+        <p><strong>${motherLabel}:</strong> ${esc(meta.name)}</p>
+        <p><strong>${scriptLabel}:</strong> ${esc(meta.script)}</p>
+        <p><strong>${sourceLabel}:</strong> ${esc(sourceName)}</p>
+        <div class="translation-box">
+          ${lines.map(line => `<p class="translated-line">${esc(line)}</p>`).join("")}
+        </div>
+      </div>`;
+    }
+
+    function isSignatureOrOfficerText(text){
+      const value = String(text || "").replace(/\s+/g, " ").trim();
+      if(!value) return true;
+      return /^(Place|Date|Dt\.?|સ્થળ|સ્થાન|તારીખ|તા\.?)\b/i.test(value) || /Signature|Advocate|Judicial Officer|Before Me|with Designation|ACJM|A\.?\s*C\.?\s*J\.?\s*M|N\.?\s*A\.?\s*Kulkarni|સહી|હસ્તાક્ષર|મારી રૂબરૂ|વકીલ|કુલકર્ણી|એ\.?\s*સી\.?\s*જે\.?\s*એમ/i.test(value);
+    }
+
+    function documentTranslationLines(root){
+      const clone = root.cloneNode(true);
+      clone.querySelectorAll("[data-translation-annex='1'],[data-mother-tongue-copy='1'],.no-print,button,.signature-row,.signature-line").forEach(node => node.remove());
+      const lines = [];
+      const addLine = text => {
+        const value = String(text || "").replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
+        if(value && !isSignatureOrOfficerText(value) && !lines.includes(value)) lines.push(value);
+      };
+      const blockSelector = "h1,h2,h3,p,li,tr,div,.case-row,.case-line,.court-head,.court-title,.question,.answer";
+      clone.querySelectorAll(blockSelector).forEach(node => {
+        if(node.matches?.("[data-translation-annex='1'],[data-mother-tongue-copy='1'],.no-print,button,.signature-row,.signature-line")) return;
+        if(node.tagName !== "TR" && Array.from(node.children || []).some(child => child.matches?.(blockSelector) && (child.innerText || child.textContent || "").trim())) return;
+        if(node.tagName === "TR"){
+          addLine(Array.from(node.cells || []).map(cell => cell.innerText || "").join(" "));
+        } else {
+          addLine(node.innerText || node.textContent || "");
+        }
+      });
+      if(lines.length) return lines;
+      return (clone.innerText || "").split(/\n+/).map(line => line.trim()).filter(line => line && !isSignatureOrOfficerText(line));
+    }
+
+    function sourcePreviewText(){
+      return documentTranslationLines(q("#print-wrap")).join("\n\n");
+    }
+
+    function protectedValues(){
+      const values = [];
+      const add = value => {
+        const text = String(value || "").trim();
+        if(text && text.length > 1 && !values.includes(text)) values.push(text);
+      };
+      Object.entries(form || {}).forEach(([key,value]) => {
+        if(/name|case|cheque|amount|date|number|address|court|law|section|act|exhibit|mobile|contact/i.test(key)) add(value);
+      });
+      add(courtHeading());
+      add(selectedCourtId);
+      return values.sort((a,b) => b.length - a.length);
+    }
+
+    function protectForWholeTranslation(text){
+      const values = [];
+      let out = String(text || "");
+      const addToken = match => {
+        const token = `__ACJM_PROTECTED_${values.length}__`;
+        values.push(match);
+        return token;
+      };
+      protectedValues().forEach(value => {
+        out = out.split(value).join(addToken(value));
+      });
+      [
+        /\beCC\/No\.\/[^\s,;]+/gi,
+        /\b[A-Z]{1,6}[A-Z./-]*\s*\d+\/\d{4}\b/g,
+        /\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b/g,
+        /\b(?:Section|Sec\.?|કલમ|ધારા)\s*[\dA-Za-z()./-]+/gi,
+        /\b(?:Rs\.?|રૂ\.?)\s*[\d,]+(?:\/-)?/gi,
+        /\b\d+(?:,\d{3})*(?:\.\d+)?\b/g,
+        /\bAIJEL-?SC\s*\d+\b/gi
+      ].forEach(pattern => { out = out.replace(pattern, addToken); });
+      return {text:out, values};
+    }
+
+    function restoreWholeTranslation(text, values){
+      return stripProtectionArtifacts(String(text || "")
+        .replace(/_*\s*(?:ACJM|एसीजेएम|ए\.?\s*सी\.?\s*जे\.?\s*एम\.?)[\s_]*(?:PROTECTED|TECTED|संरक्षित|सुरक्षित|સંરક્ષિત|ਸੁਰੱਖਿਅਤ|সুরক্ষিত|সুরক্ষিত|ସୁରକ୍ଷିତ|பாதுகாக்கப்பட்டது|సంరక్షిత|ಸಂರಕ್ಷಿತ|സംരക്ഷിത)[\s_]*(\d+)\s*_*/giu, (_, i) => values[Number(i)] || "\n\n")
+        .replace(/_+\s*ACJM\s*_+\s*PROTECTED\s*_+\s*(\d+)\s*_*/gi, (_, i) => values[Number(i)] || "")
+        .replace(/\bACJM\s*PROTECTED\s*(\d+)\b/gi, (_, i) => values[Number(i)] || "")
+        .replace(/_*\s*(?:ACJM\s*_*)?(?:PROTECTED|TECTED)\s*_*(\d+)\s*_*/gi, (_, i) => values[Number(i)] || "\n\n"));
+    }
+
+    function stripProtectionArtifacts(text){
+      return String(text || "")
+        .replace(/_*\s*(?:ACJM|एसीजेएम|ए\.?\s*सी\.?\s*जे\.?\s*एम\.?)[\s_]*(?:PROTECTED|TECTED|संरक्षित|सुरक्षित|સંરક્ષિત|ਸੁਰੱਖਿਅਤ|সুরক্ষিত|সुरক্ষিত|ସୁରକ୍ଷିତ|பாதுகாக்கப்பட்டது|సంరక్షిత|ಸಂರಕ್ಷಿತ|സംരക്ഷിത)[\s_]*\d+\s*_*/giu, "\n\n")
+        .replace(/_*\s*(?:ACJM\s*_*)?(?:PROTECTED|TECTED)\s*_*\d+\s*_*/gi, "\n\n")
+        .replace(/_+\s*(?:વર|वर|वर्|ू|U\.?V\.?A\.?\s*[:-]?)\s*_+/giu, "\n\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+
+    function translationCacheKey(source, target){
+      let hash = 0;
+      const key = `${target}\n${source}`;
+      for(let i=0;i<key.length;i++) hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+      return `acjm_final_doc_translation_v4:${kind}:${lang}:${target}:${Math.abs(hash)}`;
+    }
+
+    async function translateFinalizedDocument(source, target){
+      const cacheKey = translationCacheKey(source, target);
+      const cached = localStorage.getItem(cacheKey);
+      if(cached) return cached;
+      const protectedText = protectForWholeTranslation(source);
+      const apiTarget = target === "mni" ? "mni-Mtei" : target;
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(lang || "auto")}&tl=${encodeURIComponent(apiTarget)}&dt=t&q=${encodeURIComponent(protectedText.text)}`;
+      const res = await fetch(url);
+      if(!res.ok) throw new Error("Translation service is not reachable.");
+      const data = await res.json();
+      const translated = restoreWholeTranslation((data?.[0] || []).map(part => part?.[0] || "").join(""), protectedText.values);
+      localStorage.setItem(cacheKey, translated);
+      return translated;
+    }
+
+    function containsGujarati(text){ return /[\u0A80-\u0AFF]/.test(text || ""); }
+    function stripWhitelistedGujarati(text){
+      let out = String(text || "");
+      [form.complainant_name, form.accused_name, form.accused_address, form.surety_name, "અમદાવાદ", "અમદાવાદ શહેર", "ગુજરાત", "વડોદરા"].forEach(value => {
+        if(value) out = out.split(String(value)).join("");
+      });
+      return out;
+    }
+
+    function translatedCopyHtml(meta, translatedText, warning){
+      const lines = String(translatedText || "").split(/\n+/).map(line => line.trim()).filter(Boolean);
+      return `<div class="legal-doc translation-annex" data-translation-annex="1">
+        <h2>${esc(meta.name)} Translated Copy</h2>
+        <p><strong>Disclaimer:</strong> This translated copy is generated for convenience only. In case of any inconsistency, the original Court Copy shall prevail.</p>
+        ${warning ? `<p class="error"><strong>Warning:</strong> ${esc(warning)}</p>` : ""}
+        <div class="translation-box">
+          ${lines.map(line => `<p class="translated-line">${esc(line)}</p>`).join("")}
+        </div>
+      </div>`;
+    }
+
+    function showTranslationTargetPrompt(onDone){
+      document.querySelectorAll(".mother-modal-backdrop").forEach(n => n.remove());
+      const node = document.createElement("div");
+      node.className = "mother-modal-backdrop";
+      node.innerHTML = `<div class="mother-modal" role="dialog" aria-modal="true">
+        <h2>Generate Translated Copy</h2>
+        <p class="hint">Select the target language. The finalized preview text will be translated as one document and appended after the Court Copy.</p>
+        <select id="translation-target-select"><option value="">Select target language</option>${motherTongues.filter(l => !["gu","en"].includes(l.code)).map(l => `<option value="${l.code}">${esc(l.name)} - ${esc(l.script)}</option>`).join("")}</select>
+        <div class="error" id="translation-target-error"></div>
+        <div class="actions"><button type="button" class="btn btn-secondary" id="translation-cancel">Cancel</button><button type="button" class="btn btn-primary" id="translation-continue">Translate</button></div>
+      </div>`;
+      document.body.appendChild(node);
+      q("#translation-cancel").onclick = () => node.remove();
+      q("#translation-continue").onclick = async () => {
+        const target = q("#translation-target-select").value;
+        if(!target){ q("#translation-target-error").textContent = "Please select target language."; return; }
+        const meta = motherTongues.find(l => l.code === target);
+        node.remove();
+        await generateTranslatedCopy(meta, onDone);
+      };
+    }
+
+    async function generateTranslatedCopy(meta, onDone){
+      const status = q("#translation-status");
+      status.textContent = "Translating finalized Court Copy...";
+      q("#print-wrap").querySelectorAll("[data-translation-annex='1']").forEach(node => node.remove());
+      try {
+        const translated = await translateFinalizedDocument(sourcePreviewText(), meta.code);
+        const invalidGujarati = meta.code !== "gu" && containsGujarati(stripWhitelistedGujarati(translated));
+        const warning = invalidGujarati ? "Gujarati script remains in the translated copy. Please review and manually correct before using the PDF." : "";
+        q("#print-wrap").insertAdjacentHTML("beforeend", translatedCopyHtml(meta, translated, warning));
+        status.textContent = warning || "Translated copy appended below the Court Copy.";
+        if(typeof onDone === "function") onDone();
+      } catch (err) {
+        status.textContent = err.message || "Unable to generate translated copy.";
+      }
+    }
+
+    function hasTranslatedCopy(){
+      return !!q("#print-wrap")?.querySelector("[data-translation-annex='1']");
+    }
+
+    function confirmTranslationBeforePrint(onProceed){
+      if(kind !== "surety"){ onProceed(); return; }
+      if(hasTranslatedCopy()){ onProceed(); return; }
+      document.querySelectorAll(".mother-modal-backdrop").forEach(n => n.remove());
+      const node = document.createElement("div");
+      node.className = "mother-modal-backdrop";
+      node.innerHTML = `<div class="mother-modal" role="dialog" aria-modal="true">
+        <h2>Translation Option</h2>
+        <p class="hint">If required, you can generate a translated copy of these details in your mother tongue or a language known to you before printing.</p>
+        <div class="actions"><button type="button" class="btn btn-secondary" id="print-without-translation">Proceed Without Translation</button><button type="button" class="btn btn-primary" id="print-select-translation">Select Translation</button></div>
+      </div>`;
+      document.body.appendChild(node);
+      q("#print-without-translation").onclick = () => { node.remove(); onProceed(); };
+      q("#print-select-translation").onclick = () => { node.remove(); showTranslationTargetPrompt(onProceed); };
+    }
+
+    function showMotherTonguePrompt(onContinue){
+      if(kind !== "surety"){ onContinue(); return; }
+      document.querySelectorAll(".mother-modal-backdrop").forEach(n => n.remove());
+      const prior = form.mother_tongue || localStorage.getItem(motherTongueKey()) || "";
+      const node = document.createElement("div");
+      node.className = "mother-modal-backdrop";
+      node.innerHTML = `<div class="mother-modal" role="dialog" aria-modal="true">
+        <h2>Select Mother Tongue</h2>
+        <p class="hint">Please select the mother tongue language. If English or Gujarati is selected, no additional translated copy will be annexed.</p>
+        <select id="mother-modal-select"><option value="">Select mother tongue</option>${motherTongues.map(l => `<option value="${l.code}">${esc(l.name)} - ${esc(l.script)}</option>`).join("")}</select>
+        <div class="error" id="mother-modal-error"></div>
+        <div class="actions"><button type="button" class="btn btn-primary" id="mother-modal-continue">Continue</button></div>
+      </div>`;
+      document.body.appendChild(node);
+      const select = q("#mother-modal-select");
+      select.value = prior;
+      setTimeout(() => select.focus(), 0);
+      q("#mother-modal-continue").onclick = () => {
+        if(!select.value){ q("#mother-modal-error").textContent = "Please select mother tongue language."; return; }
+        form.mother_tongue = select.value;
+        localStorage.setItem(motherTongueKey(), select.value);
+        saveDraft();
+        node.remove();
+        onContinue();
+      };
+    }
+
+    function showPersonalBondConditionPrompt(){
+      document.querySelectorAll(".mother-modal-backdrop").forEach(n => n.remove());
+      const node = document.createElement("div");
+      node.className = "mother-modal-backdrop";
+      node.innerHTML = `<div class="mother-modal" role="dialog" aria-modal="true">
+        <h2>${lang === "gu" ? "જાત મુચરકા માટે શરતો" : "Personal Bond Conditions"}</h2>
+        <p class="hint">${lang === "gu" ? "આરોપીનો જાત મુચરકો શરતો સાથે કે શરતો વગર તૈયાર કરવો છે તે પસંદ કરો." : "Select whether the accused personal bond should be prepared with conditions or without conditions."}</p>
+        <div class="actions">
+          <button type="button" class="btn btn-secondary" id="personal-bond-without">${lang === "gu" ? "શરતો વગર" : "Without Conditions"}</button>
+          <button type="button" class="btn btn-primary" id="personal-bond-with">${lang === "gu" ? "શરતો સાથે" : "With Conditions"}</button>
+        </div>
+      </div>`;
+      document.body.appendChild(node);
+      q("#personal-bond-without").onclick = () => {
+        form.personal_bond_condition_mode = "without";
+        saveDraft();
+        node.remove();
+        previewDoc(true);
+      };
+      q("#personal-bond-with").onclick = () => {
+        form.personal_bond_condition_mode = "with";
+        activeConditionRole = "accused";
+        conditionDoneRoles = [];
+        saveDraft();
+        node.remove();
+        renderConditionStep();
+      };
+    }
+
+    function previewDoc(skipConditionStep=false, skipMotherTonguePrompt=false){
+      const check = validate();
+      if(!check.ok){
+        q("#msg").textContent = lang === "gu" ? "કૃપા કરી જરૂરી વિગતો ભરો." : "Please fill the required details.";
+        if(kind === "surety"){
+          const tmpl = selectedTemplate();
+          const sections = suretySections(tmpl.fields);
+          const target = sections.findIndex(section => section.names.some(name => check.missing.includes(name)));
+          if(target >= 0 && target !== suretyPage){ suretyPage = target; renderForm(); setTimeout(() => validate(), 0); }
+        }
+        return;
+      }
+      if(kind === "surety" && form.document_type === "personal_bond_accused" && !skipConditionStep && !form.personal_bond_condition_mode){
+        showPersonalBondConditionPrompt();
+        return;
+      }
+      if(kind === "surety" && ["surety_conditions","surety_389"].includes(form.document_type) && !skipConditionStep){
+        renderConditionStep();
+        return;
+      }
+      q("#msg").textContent = "";
+      q("#print-wrap").innerHTML = textOut(kind === "surety" ? suretyPacket() : regularDoc());
+      repairVisibleText(q("#print-wrap"));
+      setupMotherTonguePanel();
+      showStep("preview-step");
+    }
+
+    async function performSaveAndPrint(){
+      const payload = {
+        document_kind: kind, language: lang, court_id: selectedCourtId, case_number: form.case_number,
+        complainant_name: form.complainant_name, accused_name: form.accused_name, document_type: documentTitle(),
+        producing_party: form.applicant_role, applicant_name: form.applicant_name, advocate_name: form.advocate_name,
+        date: form.date || today(), fields: form, html: q("#print-wrap").innerHTML
+      };
+      await fetch(`${API}/generated-documents`, { method:"POST", headers: Object.assign({ "Content-Type":"application/json" }, localStorage.getItem("token") ? { Authorization: "Bearer " + localStorage.getItem("token") } : {}), body: JSON.stringify(payload) });
+      try { localStorage.setItem(draftKey() + "__done", "1"); } catch (e) {}
+      if(kind === "application" || kind === "pursis"){
+        await downloadCurrentPdf();
+        return;
+      }
+      q("#preview-step").classList.add("printing");
+      window.print();
+    }
+
+    function safeFileStem(value){
+      const cleaned = String(value || "")
+        .replace(/^eCC\/No\.\//i, "")
+        .replace(/[^\w.-]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      return cleaned || "document";
+    }
+
+    function currentPdfFileName(){
+      return `${safeFileStem(form.case_number || caseNumberDisplay())}_${safeFileStem(selectedTemplate().en || documentTitle())}.pdf`;
+    }
+
+    async function downloadCurrentPdf(){
+      const response = await fetch(`${API}/pdf`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          filename: currentPdfFileName(),
+          title: documentTitle(),
+          html: q("#print-wrap").innerHTML
+        })
+      });
+      if(!response.ok) throw new Error(await response.text());
+      const blob = await response.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = currentPdfFileName();
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 500);
+    }
+
+    function digitallySignCurrent(){
+      const filename = currentPdfFileName();
+      window.NyayDwarSign.open({
+        getPdf: async () => {
+          const response = await fetch(`${API}/pdf`, { method:"POST", headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({ filename, title: documentTitle(), html: q("#print-wrap").innerHTML }) });
+          if(!response.ok) throw new Error("Could not prepare the PDF.");
+          return response.blob();
+        },
+        filename, title: documentTitle(), source_kind: kind || "document", source_id: "", court_id: selectedCourtId
+      });
+    }
+
+    async function saveAndPrint(){
+      confirmTranslationBeforePrint(() => performSaveAndPrint());
+    }
+
+    function resetDraft(){
+      if(confirm("Clear this draft and start new?")){
+        localStorage.removeItem(draftKey()); localStorage.removeItem(draftKey() + "__at");
+        form = {...empty, date: today()};
+        renderForm();
+      }
+    }
+
+    (async function boot(){
+      if(!selectedCourtId){ location.href="/advocate"; return; }
+      q("#top-title").textContent = textOut(({application:"Application",pursis:"Pursis",surety:"Surety / Bond"})[kind] || "Document");
+      await loadCases();
+      await loadLaws();
+      await loadComplainants();
+      if(lang) initForm();
+    })();
+  </script>
+  <script src="/static/js/acjm-side-nav.js?v=20260928"></script>
+<script src="/static/js/acjm-sign.js?v=20261002"></script>
+</body>
+</html>
+

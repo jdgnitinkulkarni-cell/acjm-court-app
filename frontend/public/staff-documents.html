@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Application / Pursis / Surety Entries</title>
+    <link rel="stylesheet" href="/static/css/main.css" />
+    <style>
+      .doc-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      .doc-preview { background:#fff; border:1px solid #d6d3c7; border-radius:6px; padding:16px; margin-top:12px; }
+      .muted { color:#64748b; }
+      .toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+      @media print {
+        body * { visibility:hidden; }
+        #printArea, #printArea * { visibility:visible; }
+        #printArea { position:absolute; left:0; top:0; width:100%; border:0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">Staff Workspace</div>
+        <button class="btn btn-outline" onclick="location.href='/staff'">Back</button>
+      </header>
+      <main class="page">
+        <div class="toolbar">
+          <div>
+            <h1>Application / Pursis / Surety Entries</h1>
+            <p class="muted">Entries are shown for the court assigned to the logged-in staff user.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline" id="signSelectedBtn" onclick="signSelected()" disabled title="Tick the entries to sign and click here (one PIN signs all)">Digitally Sign Selected</button>
+            <button class="btn btn-primary" onclick="loadDocs()">Refresh</button>
+          </div>
+        </div>
+        <div id="message" class="muted">Loading...</div>
+        <table class="entries" id="docTable" style="display:none">
+          <thead>
+            <tr>
+              <th style="width:34px"><input type="checkbox" id="pickAll" aria-label="Select all" onchange="pickAll(this.checked)"></th>
+              <th class="sort-th" data-sort="case_number">C. C. No.<span class="sort-arrows"><span>▲</span><span>▼</span></span></th>
+              <th class="sort-th" data-sort="complainant_name">Complainant<span class="sort-arrows"><span>▲</span><span>▼</span></span></th>
+              <th class="sort-th" data-sort="accused_name">Accused<span class="sort-arrows"><span>▲</span><span>▼</span></span></th>
+              <th class="sort-th" data-sort="kind">Document<span class="sort-arrows"><span>▲</span><span>▼</span></span></th>
+              <th class="sort-th" data-sort="party">Party<span class="sort-arrows"><span>▲</span><span>▼</span></span></th>
+              <th class="sort-th" data-sort="language">Language<span class="sort-arrows"><span>▲</span><span>▼</span></span></th>
+              <th class="sort-th" data-sort="date">Date<span class="sort-arrows"><span>▲</span><span>▼</span></span></th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="docRows"></tbody>
+        </table>
+        <section id="printArea" class="doc-preview" style="display:none"></section>
+      </main>
+    </div>
+    <script>
+      const API_BASE = "/api";
+      let docs = [];
+
+      function tokenHeader() {
+        const token = localStorage.getItem("token") || "";
+        return token ? { Authorization: "Bearer " + token } : {};
+      }
+
+      function escapeHtml(value) {
+        return String(value || "").replace(/[&<>"']/g, (ch) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        }[ch]));
+      }
+
+      function friendlyKind(doc) {
+        if (doc.document_kind === "application") return "Application";
+        if (doc.document_kind === "pursis") return "Pursis";
+        if (doc.document_kind === "surety") return "Surety / Bond";
+        return doc.document_kind || "-";
+      }
+
+      function renderRows() {
+        const tbody = document.getElementById("docRows");
+        tbody.innerHTML = docs.map((doc, index) => `
+          <tr>
+            <td><input type="checkbox" class="pick" ${picked.has(doc.id) ? "checked" : ""} onchange="pickOne('${escapeHtml(doc.id)}', this.checked)" aria-label="Select"></td>
+            <td>${escapeHtml(doc.case_number)}</td>
+            <td>${escapeHtml(doc.complainant_name)}</td>
+            <td>${escapeHtml(doc.accused_name)}</td>
+            <td>${escapeHtml(friendlyKind(doc))}</td>
+            <td>${escapeHtml(doc.producing_party || doc.applicant_role)}</td>
+            <td>${escapeHtml((doc.language || "").toUpperCase())}</td>
+            <td>${escapeHtml(doc.date || (doc.created_at || "").slice(0, 10))}</td>
+            <td class="doc-actions">
+              <button class="btn btn-outline" onclick="viewDoc(${index})">View</button><button class="btn btn-outline" onclick="signDoc(${index})">Digitally Sign</button>
+              ${doc.document_kind === "surety"
+                ? `<button class="btn btn-primary" onclick="printDoc(${index})">Print / Save PDF</button>`
+                : `<button class="btn btn-primary" onclick="downloadPdf(${index}, this)">Download PDF</button><button class="btn btn-outline" onclick="printDoc(${index})">Print</button>`}
+            </td>
+          </tr>
+        `).join("");
+      }
+
+      // The document is shown / printed with exactly the same page styles
+      // as the Advocate / Litigant document generator, so the staff copy is
+      // identical to what the advocate or litigant prints.
+      let generatorStyles = null;
+      async function getGeneratorStyles() {
+        if (generatorStyles !== null) return generatorStyles;
+        try {
+          const text = await (await fetch("/doc-generator.html", { cache: "no-store" })).text();
+          const blocks = [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]);
+          generatorStyles = blocks.length ? blocks[0] : "";
+        } catch (e) { generatorStyles = ""; }
+        return generatorStyles;
+      }
+
+      async function docPage(doc, forPrint) {
+        const styles = await getGeneratorStyles();
+        return `<!doctype html><html lang="${escapeHtml(doc.language || "en")}"><head><meta charset="utf-8"><base href="${location.origin}/">` +
+          `<link rel="stylesheet" href="/static/css/main.css"><style>${styles}</style>` +
+          `<style>body{background:${forPrint ? "#fff" : "#f5f1e8"};margin:0}.page{margin:0 auto;box-shadow:none;border:0;background:transparent}</style></head>` +
+          `<body><main class="page"><section id="preview-step" class="doc-step active${forPrint ? " printing" : ""}"><div id="print-wrap">${doc.html || "<p>No preview available.</p>"}</div></section></main></body></html>`;
+      }
+
+      function safeFileStem(value) {
+        const cleaned = String(value || "").replace(/^eCC\/No\.\//i, "").replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "");
+        return cleaned || "document";
+      }
+
+      async function viewDoc(index) {
+        const doc = docs[index];
+        const preview = document.getElementById("printArea");
+        preview.innerHTML = "";
+        const frame = document.createElement("iframe");
+        frame.style.cssText = "width:100%;min-height:1100px;border:0;background:#f5f1e8";
+        preview.appendChild(frame);
+        preview.style.display = "block";
+        frame.srcdoc = await docPage(doc, false);
+        frame.onload = () => { try { frame.style.height = (frame.contentDocument.body.scrollHeight + 40) + "px"; } catch (e) { /* ignore */ } };
+        preview.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      async function printDoc(index) {
+        const doc = docs[index];
+        const frame = document.createElement("iframe");
+        frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+        document.body.appendChild(frame);
+        frame.srcdoc = await docPage(doc, true);
+        frame.onload = () => {
+          const w = frame.contentWindow;
+          const go = () => { w.focus(); w.print(); setTimeout(() => frame.remove(), 60000); };
+          if (w.document.fonts && w.document.fonts.ready) w.document.fonts.ready.then(() => setTimeout(go, 150)); else setTimeout(go, 400);
+        };
+      }
+
+      async function downloadPdf(index, button) {
+        const doc = docs[index];
+        const label = button ? button.textContent : "";
+        if (button) { button.disabled = true; button.textContent = "Preparing..."; }
+        try {
+          const kindStem = safeFileStem(doc.document_type || "") !== "document" ? safeFileStem(doc.document_type) : safeFileStem(friendlyKind(doc));
+          const filename = `${safeFileStem(doc.case_number)}_${kindStem}.pdf`;
+          const response = await fetch(API_BASE + "/pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename, title: doc.document_type || friendlyKind(doc), html: doc.html || "" })
+          });
+          if (!response.ok) throw new Error(await response.text());
+          const blob = await response.blob();
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = filename;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        } catch (e) {
+          alert("Could not prepare the PDF. Please try Print instead.");
+        } finally {
+          if (button) { button.disabled = false; button.textContent = label; }
+        }
+      }
+
+      const picked = new Set();
+      function updatePicked() {
+        const n = docs.filter((d) => picked.has(d.id)).length;
+        const btn = document.getElementById("signSelectedBtn");
+        btn.disabled = n === 0;
+        btn.textContent = n > 1 ? `Digitally Sign Selected (${n})` : "Digitally Sign Selected";
+        const all = document.getElementById("pickAll");
+        if (all) all.checked = docs.length > 0 && n === docs.length;
+      }
+      function pickOne(id, on) { if (on) picked.add(id); else picked.delete(id); updatePicked(); }
+      function pickAll(on) { picked.clear(); if (on) docs.forEach((d) => picked.add(d.id)); renderRows(); updatePicked(); }
+      function docSignItem(doc) {
+        const kindStem = safeFileStem(doc.document_type || "") !== "document" ? safeFileStem(doc.document_type) : safeFileStem(friendlyKind(doc));
+        const filename = `${safeFileStem(doc.case_number)}_${kindStem}.pdf`;
+        return {
+          getPdf: async () => {
+            const response = await fetch(API_BASE + "/pdf", { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ filename, title: doc.document_type || friendlyKind(doc), html: doc.html || "" }) });
+            if (!response.ok) throw new Error("Could not prepare the PDF.");
+            return response.blob();
+          },
+          filename, title: `${doc.document_type || friendlyKind(doc)} — ${doc.case_number || ""}`, source_id: doc.id || ""
+        };
+      }
+      function signSelected() {
+        const list = docs.filter((d) => picked.has(d.id));
+        if (!list.length) return;
+        const kinds = new Set(list.map((d) => d.document_kind));
+        window.NyayDwarSign.open({ docs: list.map(docSignItem), source_kind: kinds.size === 1 ? list[0].document_kind : "document" });
+      }
+      function signDoc(index) {
+        const doc = docs[index];
+        const kindStem = safeFileStem(doc.document_type || "") !== "document" ? safeFileStem(doc.document_type) : safeFileStem(friendlyKind(doc));
+        const filename = `${safeFileStem(doc.case_number)}_${kindStem}.pdf`;
+        window.NyayDwarSign.open({
+          getPdf: async () => {
+            const response = await fetch(API_BASE + "/pdf", { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ filename, title: doc.document_type || friendlyKind(doc), html: doc.html || "" }) });
+            if (!response.ok) throw new Error("Could not prepare the PDF.");
+            return response.blob();
+          },
+          filename, title: `${doc.document_type || friendlyKind(doc)} — ${doc.case_number || ""}`,
+          source_kind: doc.document_kind || "document", source_id: doc.id || ""
+        });
+      }
+
+      async function loadDocs() {
+        const message = document.getElementById("message");
+        const table = document.getElementById("docTable");
+        message.textContent = "Loading...";
+        table.style.display = "none";
+        try {
+          const response = await fetch(API_BASE + "/generated-documents", { headers: tokenHeader() });
+          if (!response.ok) throw new Error("Unable to load entries");
+          docs = await response.json();
+          originalOrder = docs.slice(); sortState = { key: null, dir: null };
+          if (!docs.length) {
+            message.textContent = "No Application / Pursis / Surety entries found.";
+            return;
+          }
+          picked.clear();
+          renderRows(); updatePicked();
+          message.textContent = "";
+          table.style.display = "table";
+        } catch (error) {
+          message.textContent = error.message || "Unable to load entries.";
+        }
+      }
+
+      // Column sorting (▲ ascending / ▼ descending / original order).
+      let sortState = { key: null, dir: null };
+      let originalOrder = [];
+      function sortValue(doc, key) {
+        if (key === "kind") return friendlyKind(doc);
+        if (key === "party") return doc.producing_party || doc.applicant_role || "";
+        if (key === "date") return doc.created_at || doc.date || "";
+        return doc[key] || "";
+      }
+      document.querySelectorAll("#docTable th[data-sort]").forEach((th) => {
+        th.addEventListener("click", () => {
+          const key = th.dataset.sort;
+          if (!originalOrder.length || originalOrder.length !== docs.length) originalOrder = docs.slice();
+          sortState = sortState.key !== key ? { key, dir: "asc" } : sortState.dir === "asc" ? { key, dir: "desc" } : { key: null, dir: null };
+          if (!sortState.key) docs = originalOrder.slice();
+          else {
+            const coll = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+            docs = docs.slice().sort((a, b) => { const c = coll.compare(String(sortValue(a, key)), String(sortValue(b, key))); return sortState.dir === "asc" ? c : -c; });
+          }
+          document.querySelectorAll("#docTable th[data-sort]").forEach((h) => {
+            const on = h.dataset.sort === sortState.key;
+            h.classList.toggle("sorted", on);
+            const arrows = h.querySelectorAll(".sort-arrows span");
+            arrows[0].classList.toggle("on", on && sortState.dir === "asc");
+            arrows[1].classList.toggle("on", on && sortState.dir === "desc");
+          });
+          renderRows();
+        });
+      });
+
+      loadDocs();
+    </script>
+    <script src="/static/js/acjm-side-nav.js?v=20260928"></script>
+    <script src="/static/js/acjm-sign.js?v=20261002"></script>
+</body>
+</html>

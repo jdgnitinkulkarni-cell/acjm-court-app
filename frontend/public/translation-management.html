@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Translation Management</title>
+  <link rel="stylesheet" href="/static/css/main.css" />
+  <style>
+    .tm-card { max-width: 1180px; }
+    .tm-grid { display:grid; grid-template-columns: 160px 1fr 160px 1fr; gap:12px; align-items:center; }
+    .tm-grid input,.tm-grid select,.tm-grid textarea { border:1px solid #d4c8b0; border-radius:4px; font-family:inherit; font-size:15px; padding:10px 12px; width:100%; box-sizing:border-box; }
+    .tm-grid textarea { min-height:72px; resize:vertical; }
+    .tm-list { display:grid; gap:10px; margin-top:20px; }
+    .tm-item { border:1px solid #e2d8c8; border-radius:6px; padding:12px; }
+    .tm-item-head { display:flex; justify-content:space-between; gap:14px; align-items:center; }
+    .tm-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+    .tm-small { color:#64748b; font-size:13px; }
+    .tm-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+    @media(max-width:820px){ .tm-grid,.tm-cols { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="topbar">
+      <h2>Translation Management</h2>
+      <button class="btn btn-secondary" onclick="location.href='/admin'">Back</button>
+    </div>
+    <div class="page tm-card">
+      <h1>Translation Memory Library</h1>
+      <p class="hint">Static court text is translated from local templates and dictionaries. Corrections made here are saved as approved translation memory and reused before PDF generation.</p>
+      <div class="tm-actions" style="margin:12px 0 18px">
+        <button class="btn btn-outline" onclick="seedStaticLibrary()">Seed Static Translation Library</button>
+        <button class="btn btn-outline" onclick="exportLibrary()">Export Translation Library</button>
+        <button class="btn btn-primary" onclick="document.getElementById('tm-import').click()">Import Translation Library</button>
+        <input id="tm-import" type="file" accept=".json" style="display:none" onchange="importLibrary(event)" />
+      </div>
+
+      <div class="section-title">Add / Approve Translation</div>
+      <div class="tm-grid">
+        <label>Target Language</label><select id="tm-language"></select>
+        <label>Form Type</label><input id="tm-form-type" placeholder="primary-fs / plea / surety" />
+        <label>Field Type</label><input id="tm-field-type" placeholder="question / answer / clause" />
+        <label>Approved</label><select id="tm-approved"><option value="yes">Yes</option><option value="no">No</option></select>
+        <label>Original Text</label><textarea id="tm-original"></textarea>
+        <label>Translated Text</label><textarea id="tm-translated"></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveEntry()">Save Translation</button>
+        <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+      </div>
+      <p id="tm-msg" class="hint"></p>
+
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Existing Translation Memory</span>
+        <select id="tm-filter" style="max-width:260px" onchange="renderList()"></select>
+      </div>
+      <div id="tm-list" class="tm-list"></div>
+    </div>
+  </div>
+  <script src="/static/js/acjm-translation-engine.js?v=20260624-translation-engine"></script>
+  <script>
+    const engine = window.ACJM_TRANSLATION_ENGINE;
+    const q = s => document.querySelector(s);
+    const esc = v => engine.escapeHtml(v || "");
+    let editingStaticIndex = null;
+    function fillLanguages(){
+      const opts = engine.allLanguages.map(l => `<option value="${l.code}">${esc(l.name)} - ${esc(l.script)}</option>`).join("");
+      q("#tm-language").innerHTML = opts;
+      q("#tm-filter").innerHTML = `<option value="">All languages</option>${opts}`;
+    }
+    function clearForm(){
+      ["#tm-original","#tm-translated","#tm-form-type","#tm-field-type"].forEach(id => q(id).value = "");
+      q("#tm-approved").value = "yes";
+      editingStaticIndex = null;
+    }
+    function seedStaticLibrary(){
+      const result = engine.seedTranslationLibrary();
+      q("#tm-msg").textContent = `Static library ready. Added ${result.added}; total static entries ${result.total}.`;
+      renderList();
+    }
+    function saveEntry(){
+      const original = q("#tm-original").value.trim();
+      const translated = q("#tm-translated").value.trim();
+      if(!original || !translated){ q("#tm-msg").textContent = "Please enter original and translated text."; return; }
+      if(editingStaticIndex !== null){
+        const staticItems = engine.loadStaticLibrary();
+        if(staticItems[editingStaticIndex]){
+          staticItems[editingStaticIndex].approved_text = translated;
+          staticItems[editingStaticIndex].source_text = original;
+          staticItems[editingStaticIndex].target_language = q("#tm-language").value;
+          staticItems[editingStaticIndex].is_approved = q("#tm-approved").value === "yes";
+          staticItems[editingStaticIndex].updated_at = new Date().toISOString();
+          engine.saveStaticLibrary(staticItems);
+        }
+        q("#tm-msg").textContent = "Static translation saved.";
+      } else {
+        engine.remember(original, q("#tm-language").value, translated, q("#tm-form-type").value.trim(), q("#tm-field-type").value.trim(), q("#tm-approved").value === "yes");
+        q("#tm-msg").textContent = "Translation saved.";
+      }
+      clearForm();
+      renderList();
+    }
+    function editStaticEntry(index){
+      const item = engine.loadStaticLibrary()[index];
+      if(!item) return;
+      editingStaticIndex = index;
+      q("#tm-language").value = item.target_language || "hi";
+      q("#tm-form-type").value = item.form_name || "";
+      q("#tm-field-type").value = item.field_key || "";
+      q("#tm-original").value = item.source_text || "";
+      q("#tm-translated").value = item.approved_text || "";
+      q("#tm-approved").value = item.is_approved ? "yes" : "no";
+      window.scrollTo({top:0, behavior:"smooth"});
+    }
+    function editEntry(index){
+      const item = engine.loadMemory()[index];
+      if(!item) return;
+      editingStaticIndex = null;
+      q("#tm-language").value = item.target_language || "hi";
+      q("#tm-form-type").value = item.form_type || "";
+      q("#tm-field-type").value = item.field_type || "";
+      q("#tm-original").value = item.original_text || "";
+      q("#tm-translated").value = item.approved_text || item.translated_text || "";
+      q("#tm-approved").value = item.approved_text ? "yes" : "no";
+      window.scrollTo({top:0, behavior:"smooth"});
+    }
+    function approveEntry(index){
+      const items = engine.loadMemory();
+      if(!items[index]) return;
+      items[index].approved_text = items[index].translated_text || items[index].approved_text || "";
+      items[index].updated_date = new Date().toISOString();
+      engine.saveMemory(items);
+      renderList();
+    }
+    function deleteEntry(index){
+      if(!confirm("Delete this translation entry?")) return;
+      const items = engine.loadMemory();
+      items.splice(index, 1);
+      engine.saveMemory(items);
+      renderList();
+    }
+    function renderList(){
+      const filter = q("#tm-filter").value;
+      const staticItems = engine.loadStaticLibrary();
+      const memoryItems = engine.loadMemory();
+      const staticHtml = staticItems.map((item, index) => ({item,index}))
+        .filter(({item}) => !filter || item.target_language === filter)
+        .map(({item,index}) => {
+          const lang = engine.getMeta(item.target_language);
+          return `<div class="tm-item">
+            <div class="tm-item-head">
+              <strong>${esc(lang?.name || item.target_language)} <span class='success'>Static Approved</span></strong>
+              <div class="tm-actions">
+                <button class="btn btn-outline" onclick="editStaticEntry(${index})">Edit</button>
+              </div>
+            </div>
+            <div class="tm-small">${esc(item.module_name || "")} / ${esc(item.form_name || "")} / ${esc(item.field_key || "")} | Updated: ${esc(item.updated_at || "")}</div>
+            <div class="tm-cols"><div><strong>Source</strong><br/>${esc(item.source_text)}</div><div><strong>Approved Translation</strong><br/>${esc(item.approved_text)}</div></div>
+          </div>`;
+        }).join("");
+      const memoryHtml = memoryItems.map((item, index) => ({item,index}))
+        .filter(({item}) => !filter || item.target_language === filter)
+        .map(({item,index}) => {
+          const lang = engine.getMeta(item.target_language);
+          return `<div class="tm-item">
+            <div class="tm-item-head">
+              <strong>${esc(lang?.name || item.target_language)} ${item.approved_text ? "<span class='success'>Approved</span>" : "<span class='error'>Not approved</span>"}</strong>
+              <div class="tm-actions">
+                <button class="btn btn-outline" onclick="editEntry(${index})">Edit</button>
+                <button class="btn btn-primary" onclick="approveEntry(${index})">Approve</button>
+                <button class="btn btn-danger" onclick="deleteEntry(${index})">Delete</button>
+              </div>
+            </div>
+            <div class="tm-small">${esc(item.form_type || "")} ${esc(item.field_type || "")} | Updated: ${esc(item.updated_date || "")}</div>
+            <div class="tm-cols"><div><strong>Original</strong><br/>${esc(item.original_text)}</div><div><strong>Translation</strong><br/>${esc(item.approved_text || item.translated_text)}</div></div>
+          </div>`;
+        }).join("");
+      q("#tm-list").innerHTML = staticHtml + memoryHtml || `<p class="hint">No translation memory entries found.</p>`;
+    }
+    function exportLibrary(){
+      const invalid = invalidGujaratiRecords();
+      if(invalid.length){
+        q("#tm-msg").textContent = `Export blocked. ${invalid.length} non-Gujarati translation record(s) still contain Gujarati script outside approved whitelist.`;
+        return;
+      }
+      const payload = {static_library:engine.loadStaticLibrary(), translation_memory:engine.loadMemory()};
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "acjm-translation-library.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+    function importLibrary(event){
+      const file = event.target.files?.[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const imported = JSON.parse(reader.result);
+          const importedMemory = Array.isArray(imported) ? imported : imported.translation_memory;
+          const importedStatic = Array.isArray(imported) ? [] : imported.static_library;
+          if(!Array.isArray(importedMemory)) throw new Error("Invalid library");
+          const existing = engine.loadMemory();
+          const merged = [...existing];
+          importedMemory.forEach(entry => {
+            const idx = merged.findIndex(item => item.target_language === entry.target_language && item.original_text === entry.original_text);
+            if(idx >= 0) merged[idx] = {...merged[idx], ...entry, updated_date:new Date().toISOString()};
+            else merged.push(entry);
+          });
+          engine.saveMemory(merged);
+          if(Array.isArray(importedStatic)){
+            const existingStatic = engine.loadStaticLibrary();
+            const mergedStatic = [...existingStatic];
+            importedStatic.forEach(entry => {
+              const idx = mergedStatic.findIndex(item => item.target_language === entry.target_language && item.module_name === entry.module_name && item.form_name === entry.form_name && item.field_key === entry.field_key);
+              if(idx >= 0) mergedStatic[idx] = {...mergedStatic[idx], ...entry, updated_at:new Date().toISOString()};
+              else mergedStatic.push(entry);
+            });
+            engine.saveStaticLibrary(mergedStatic);
+          }
+          q("#tm-msg").textContent = "Translation library imported.";
+          renderList();
+        } catch {
+          q("#tm-msg").textContent = "Unable to import translation library.";
+        }
+      };
+      reader.readAsText(file, "utf-8");
+    }
+    function containsGujarati(text) {
+      return /[\u0A80-\u0AFF]/.test(text || "");
+    }
+    function isWhitelistedGujaratiOnly(text, record) {
+      let reduced = String(text || "");
+      [
+        /એન\.?એ\.?કુલકર્ણી/g,
+        /અમદાવાદ(?:\s+શહેર)?/g,
+        /ગુજરાત/g,
+        /વડોદરા/g,
+        /સુરત/g,
+        /રાજકોટ/g,
+        /ભાવનગર/g,
+        /ગાંધીનગર/g
+      ].forEach(pattern => { reduced = reduced.replace(pattern, ""); });
+      return !containsGujarati(reduced);
+    }
+    function hasInvalidGujarati(record) {
+      if (record.target_language === "gu") return false;
+      const text = [
+        record.translated_text,
+        record.approved_text
+      ].filter(Boolean).join(" ");
+      return containsGujarati(text) && !isWhitelistedGujaratiOnly(text, record);
+    }
+    function invalidGujaratiRecords(){
+      const dynamicRecords = engine.loadMemory();
+      const staticRecords = engine.loadStaticLibrary().map(item => ({
+        ...item,
+        translated_text:item.approved_text,
+        approved_text:item.approved_text
+      }));
+      return [...staticRecords, ...dynamicRecords].filter(hasInvalidGujarati);
+    }
+    fillLanguages();
+    renderList();
+  </script>
+  <script src="/static/js/acjm-side-nav.js?v=20260928"></script>
+</body>
+</html>

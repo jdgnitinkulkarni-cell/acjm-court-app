@@ -1,0 +1,110 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Conviction Warrant</title>
+  <link rel="stylesheet" href="/static/css/main.css" />
+  <style>
+    @font-face { font-family:"Lohit Gujarati"; src:url("/fonts/Lohit-Gujarati.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap; }
+    @font-face { font-family:"Tiro Devanagari Hindi"; src:url("/fonts/TiroDevanagariHindi-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap; }
+    @page { size:A4; margin:12mm; }
+    .w-card{max-width:980px}
+    .w-grid{grid-gap:14px;align-items:center;display:grid;gap:14px;grid-template-columns:220px 1fr}
+    .w-grid label{color:#374151;font-weight:600}
+    .w-grid input,.w-grid select,.w-grid textarea{background:#fff;border:1px solid #d4c8b0;border-radius:4px;font-family:inherit;font-size:15px;padding:10px 12px;width:100%}
+    .date-pair{display:grid;grid-template-columns:1fr 54px;gap:8px;position:relative}.date-pair .hidden-date{height:1px;opacity:0;pointer-events:none;position:absolute;right:0;top:0;width:1px}
+    .w-grid textarea{min-height:80px}
+    .warrant{width:185mm;min-height:272mm;margin:0 auto 16px;background:#fff;color:#111;padding:8mm 10mm;box-sizing:border-box;font-family:"Lohit Gujarati", "Tiro Devanagari Hindi", "Times New Roman", serif;font-size:15px;line-height:1.45}
+    .warrant h1{text-align:center;font-size:18px;text-decoration:underline}
+    .warrant p{text-align:justify;margin:8px 0}
+    .custody-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px}
+    .custody-table{border-collapse:collapse;width:100%;margin:12px 0}.custody-table td,.custody-table th{border:1px solid #111;padding:5px;text-align:center}
+    @media print{.no-print,.topbar,.form-actions{display:none!important}.page{box-shadow:none;margin:0;max-width:none;padding:0}.warrant{margin:0 auto}}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="topbar no-print"><h2>Conviction Warrant</h2><button class="btn btn-secondary" onclick="location.href='/staff'">Back</button></div>
+    <div class="page w-card">
+      <div id="form" class="no-print">
+        <h1>Conviction Warrant - Gujarati</h1>
+        <div class="section-title">Case and Sentence Details</div>
+        <div class="w-grid" id="grid"></div>
+        <div class="section-title">Previous Custody</div>
+        <div id="custody"></div>
+        <button class="btn btn-outline" onclick="addCustody()" type="button">Add Previous Custody</button>
+        <p id="msg" class="error"></p>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="location.href='/staff'">Back</button>
+          <button class="btn btn-danger" onclick="resetForm()">Reset</button>
+          <button class="btn btn-primary" onclick="preview()">Preview</button>
+        </div>
+      </div>
+      <div id="printArea"></div>
+      <div class="form-actions no-print" id="printActions" style="display:none">
+        <button class="btn btn-secondary" onclick="document.getElementById('form').style.display='block';document.getElementById('printActions').style.display='none'">Edit</button>
+        <button class="btn btn-primary" onclick="window.print()">Print / PDF</button>
+        <button class="btn btn-outline" onclick="signWarrant()">Digitally Sign</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const API="/api";
+    const token=localStorage.getItem("token")||"";
+    const selectedCourt=JSON.parse(localStorage.getItem("user")||"{}").court || null;
+    const todayISO=()=>new Date().toISOString().slice(0,10);
+    const todayDMY=()=>fmtDate(todayISO());
+    const f={case_number:"",accused_name:"",age:"",address:"",law_details:"",imprisonment:"",fine_amount:"",default_imprisonment:"",judgment_date:"",warrant_date:"",staff_name:"",staff_designation:""};
+    let pleas=[], custody=[{from:"",to:"",days:""}];
+    const labels={case_number:"કેસ નંબર",accused_name:"દોષિત / આરોપીનું નામ",age:"ઉંમર",address:"સરનામું",law_details:"કાયદા / કલમની વિગત",imprisonment:"મુળ કેદની સજા",fine_amount:"દંડ / વળતર રકમ",default_imprisonment:"દંડ ન ભરે તો કસૂર બદલ સજા",judgment_date:"ચુકાદાની તારીખ",warrant_date:"વોરંટ તારીખ",staff_name:"તૈયાર કરનારનું નામ",staff_designation:"તૈયાર કરનારનો હોદ્દો"};
+    const lawOptions=["કલમ ૧૩૮, ધી. નેગો. ઇન્સ્ટ્રુમેન્ટ એક્ટ, ૧૮૮૧","કલમ ૨૫, પેમેન્ટ અને સેટલમેન્ટ સીસ્ટમ એક્ટ, ૨૦૦૭"];
+    const esc=v=>String(v||"").replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const fmtDate=v=>{if(!v)return "";const [y,m,d]=String(v).split("-");return y&&m&&d?`${d}/${m}/${y}`:String(v)};
+    const toISO=v=>{if(!v)return "";const s=String(v).trim();if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`:""};
+    const setDate=(obj,k,v)=>{obj[k]=fmtDate(v)};
+    const dateControl=(expr,value)=>`<div class="date-pair"><input placeholder="DD/MM/YYYY" value="${esc(value)}" oninput="${expr}=this.value"/><button class="btn btn-outline" type="button" style="padding:10px 8px" onclick="this.nextElementSibling.showPicker ? this.nextElementSibling.showPicker() : this.nextElementSibling.click()">Cal</button><input class="hidden-date" type="date" value="${esc(toISO(value))}" onchange="${expr}=fmtDate(this.value);this.parentElement.querySelector('input[placeholder]').value=${expr}"/></div>`;
+    const inclusiveDays=(from,to)=>{const fromISO=toISO(from),toISOValue=toISO(to);if(!fromISO||!toISOValue)return "";const a=new Date(fromISO+"T00:00:00"),b=new Date(toISOValue+"T00:00:00");if(Number.isNaN(a)||Number.isNaN(b)||b<a)return "";return Math.floor((b-a)/86400000)+1};
+    if(!f.warrant_date) f.warrant_date=todayDMY();
+    function set(k,v){f[k]=v;}
+    async function loadCases(){try{const r=await fetch(API+"/pleas",{headers:token?{Authorization:"Bearer "+token}:{}});pleas=await r.json();}catch{pleas=[]}}
+    function render(){
+      document.getElementById("grid").innerHTML=`
+        <label>હાલનો કેસ પસંદ કરો</label><input id="casePick" list="cases" value="${esc(f.case_number)}" oninput="pickCase(this.value)" /><datalist id="cases">${pleas.map(p=>`<option value="${esc(p.accused?.case_no||"")}">${esc(p.accused?.case_no||"")} - ${esc(p.accused?.name||"")}</option>`).join("")}</datalist>
+        ${Object.keys(labels).map(k=>`<label>${labels[k]}</label>${k==="law_details"?`<select onchange="set('law_details',this.value)"><option value="">--</option>${lawOptions.map(o=>`<option value="${esc(o)}" ${f.law_details===o?"selected":""}>${esc(o)}</option>`).join("")}</select>`:["judgment_date","warrant_date"].includes(k)?dateControl(`f.${k}`,f[k]):["address"].includes(k)?`<textarea oninput="set('${k}',this.value)">${esc(f[k])}</textarea>`:`<input value="${esc(f[k])}" oninput="set('${k}',this.value)" />`}`).join("")}`;
+      renderCustody();
+    }
+    function pickCase(v){f.case_number=v;const p=pleas.find(x=>(x.accused?.case_no||"")===v);if(p){f.accused_name=p.accused?.name||"";f.age=p.accused?.age||"";f.address=p.accused?.address||"";}render();}
+    function addCustody(){custody.push({from:"",to:"",days:""});renderCustody();}
+    function delCustody(i){custody.splice(i,1);if(!custody.length)addCustody();renderCustody();}
+    function updateCustody(i,k,v){custody[i][k]=v;custody[i].days=inclusiveDays(custody[i].from,custody[i].to);renderCustody()}
+    function custodyDate(i,k,value){return `<div class="date-pair"><input placeholder="DD/MM/YYYY" value="${esc(value)}" oninput="custody[${i}].${k}=this.value;custody[${i}].days=inclusiveDays(custody[${i}].from,custody[${i}].to);this.closest('.custody-row').querySelector('[data-days]').value=custody[${i}].days"/><button class="btn btn-outline" type="button" style="padding:10px 8px" onclick="this.nextElementSibling.showPicker ? this.nextElementSibling.showPicker() : this.nextElementSibling.click()">Cal</button><input class="hidden-date" type="date" value="${esc(toISO(value))}" onchange="updateCustody(${i},'${k}',fmtDate(this.value))"/></div>`}
+    function renderCustody(){document.getElementById("custody").innerHTML=custody.map((c,i)=>`<div class="custody-row">${custodyDate(i,'from',c.from)}${custodyDate(i,'to',c.to)}<input data-days placeholder="કુલ દિન" value="${esc(inclusiveDays(c.from,c.to))}" readonly/><button class="btn btn-danger" onclick="delCustody(${i})" type="button">Delete</button></div>`).join("")}
+    function signWarrant(){
+      const styles=[...document.querySelectorAll("style")].map(x=>x.textContent).join("\n");
+      const filename=("Conviction_Warrant_"+(f.case_number||"case")+".pdf").replace(/[\\/:*?"<>|\s]+/g,"_");
+      window.NyayDwarSign.open({
+        getPdf: async()=>{const r=await fetch(API+"/pdf",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename,title:"Conviction Warrant",html:"<style>"+styles+"</style>"+document.getElementById("printArea").innerHTML})});if(!r.ok)throw new Error("Could not prepare the PDF.");return r.blob();},
+        filename, title:"Conviction Warrant — "+(f.case_number||""), source_kind:"warrant_conviction", source_id:""
+      });
+    }
+    function resetForm(){Object.keys(f).forEach(k=>f[k]="");f.judgment_date="";f.warrant_date=todayDMY();custody=[{from:"",to:"",days:""}];render();document.getElementById("printArea").innerHTML=""}
+    function preview(){
+      if(!f.case_number||!f.accused_name){document.getElementById("msg").textContent="કેસ નંબર અને દોષિતનું નામ જરૂરી છે.";return}
+      const court=selectedCourt?.gujarati||selectedCourt?.english||{};
+      custody.forEach(c=>c.days=inclusiveDays(c.from,c.to));
+      const total=custody.reduce((a,c)=>a+(parseInt(c.days,10)||0),0);
+      document.getElementById("printArea").innerHTML=`<div class="warrant"><h1>::ન્યાયાલય દ્વારા કરવામાં આવેલ કેદ અને / દંડ ની સજા ના પ્રતિબદ્ધતા માટે નું વોરંટ::</h1><p style="text-align:center">(નમૂના ક્ર. ૩૪ /૩૫)</p><p style="text-align:center">(વંચાણે - ફો. કા. સંહિતા કલમ ૨૩૫, ૨૪૮ અને ૨૫૫ / બી. એન. એસ. એસ. ૨૫૮, ૨૭૧, ૨૭૮)</p><p>પ્રતિ શ્રી,<br/>જેલર શ્રી સાબરમતી જેલ<br/>તા., જી. અમદાવાદ શહેર</p><p><strong>વિષય -</strong> સજા ભોગવવા માટે જેલ હવાલે રાખી લેવા બાબત.</p><p>મહોદય શ્રી,</p><p>આથી તમોને જણાવવાનું કે, તા. ${esc(fmtDate(f.judgment_date))} ના રોજ હાલના કામના કેદી નામે ${esc(f.accused_name)}, ઉ.વ.અ. - ${esc(f.age)}, રહે. ${esc(f.address)} ને ${esc(f.case_number)} ના કામે અમો ${esc(court.court_name||"")} દ્વારા ${esc(f.law_details)} ના કામે દોષિત ઠેરવવામાં આવેલ હોઇ, ${esc(f.imprisonment)} ની સજા તેમજ રકમ રૂ. ${esc(f.fine_amount)} દંડ / વળતર. જો દંડની રકમ ન ભરે તો વધુ સ્વતંત્ર રીતે ${esc(f.default_imprisonment)} ની સજા.</p><p>જેથી સબબ વોરંટ ઇસમ નામે ${esc(f.accused_name)}, ઉ.વ.અ. - ${esc(f.age)}, રહે. ${esc(f.address)} ને સજા ભોગવવા માટે તમારી તરફ રવાના કરવામાં આવે છે. તેથી સબબ સજાની અમલવારી કાયદા અને નિયમ હેઠળ કરવી.</p><p>નોંધ - સબબ કામના દોષિત નીચે જણાવ્યા પ્રમાણેના સમયગાળા માટે કેસની સુનાવણી દરમિયાન જેલ હવાલે રાખવામાં આવેલ હોઇ, ફોજ. કાર્ય. સંહિતા કલમ ૪૨૮ / બી. એન. એસ. એસ. કલમ ૪૬૮ હેઠળ મજરે મળવા પાત્ર છે.</p><table class="custody-table"><tr><th>અનુ ક્ર.</th><th>કેદમાં રજુ થયા તારીખ</th><th>કેદમાંથી મુક્ત થયા તારીખ</th><th>કુલ દિન</th></tr>${custody.map((c,i)=>`<tr><td>${i+1}</td><td>${esc(fmtDate(c.from))}</td><td>${esc(fmtDate(c.to))}</td><td>${esc(c.days)}</td></tr>`).join("")}<tr><th colspan="3">કૂલ દિન</th><th>${total}</th></tr></table><p>નોંધ - સબબ કામે દોષિતને મુળ સજા અને દંડ ન ભરે તો કસૂર બદલની સજા સ્વતંત્ર રીતે ભોગવવાની રહેલ છે.</p><p>નોંધ - સબબ દંડની રકમ વળતર પેટે ચુકવવાની થતી હોય, બી. એન. એસ. એસ. ની કલમ ૩૯૫(૨) વંચાણે લેતા, અહી આ રકમની ચુકવણી સંબંધે સ્પષ્ટતા કરવાની કે, સબબ વળતરની રકમની ચુકવણી -</p><ul><li>જો હાલના કામે થયેલ હુકમ સામે કોઇ અપીલ કરવામાં ન આવે તો, કાયદા મુજબ અપીલ સમય પૂર્ણ થાય, તે પછી કરવાની રહેશે.</li><li>જો હાલના કામે થયેલ હુકમ સામે અપીલ દાખલ કરવામાં આવે તો, અપીલ સંબંધે હુકમ પછી (અપીલ ઉપર આવેલ હુકમ મુજબ) કરવાની રહેશે.</li></ul><p>તા. ${esc(fmtDate(f.warrant_date))}</p><div style="display:flex;justify-content:space-between;margin-top:35px"><div style="min-width:62mm;text-align:center"><div style="height:14mm"></div><p class="staff-sign-marker" style="font-size:1px;line-height:1px;height:1px;margin:0;padding:0;color:#fff;overflow:hidden">Locate the Staff Signature Here</p>તૈયાર કરનાર<br/>${esc(f.staff_name)}<br/>${esc(f.staff_designation)}</div><div style="min-width:62mm;text-align:center"><div style="height:14mm"></div><p class="jo-sign-marker" style="font-size:1px;line-height:1px;height:1px;margin:0;padding:0;color:#fff;overflow:hidden">Locate the Judicial Officer Signature Here</p>(એન. એ. કુલકર્ણી)<br/>૩૬ માં અધિક ચીફ જ્યુ. મેજી.<br/>અમદાવાદ શહેર.</div></div><p>સ્થળ - અમદાવાદ શહેર</p></div>`;
+      document.getElementById("form").style.display="none";document.getElementById("printActions").style.display="flex";
+    }
+    (async()=>{await loadCases();render()})();
+  </script>
+  <script src="/static/js/acjm-runtime-enhancements.js"></script>
+  <script src="/static/js/acjm-side-nav.js?v=20260928"></script>
+  <script src="/static/js/acjm-sign.js?v=20261002"></script>
+</body>
+</html>
+
+
+
+

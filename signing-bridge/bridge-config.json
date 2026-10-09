@@ -1,0 +1,7 @@
+{
+  "trusted_servers": ["http://10.83.118.171", "http://10.83.118.171:8000", "http://localhost:8000", "http://127.0.0.1:8000"],
+  "ask_before_trusting_new_server": true,
+  "pkcs11_libraries": [],
+  "reason": "Digitally signed on NyayDwar",
+  "location": "Ahmedabad"
+}

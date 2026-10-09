@@ -1,0 +1,57 @@
+ACJM COURT APP - HOW TO TEST "DEMAND" AND "LIVE DEPOSITION"
+============================================================
+
+Before testing: restart start_windows.bat, then press Ctrl+F5 in every browser.
+Use THREE browser windows (or three computers on the office network):
+  Window 1 = Judge   (Chrome)
+  Window 2 = Staff   (Chrome Incognito, or Edge)
+  Window 3 = Advocate (another browser / another PC / mobile)
+Each window must be a separate browser or incognito window, because one browser
+window keeps only one login at a time.
+
+Test logins
+-----------
+Judge    : Judge1 (your judge login) - Court No. 1
+Staff    : Court1 (staff of Court No. 1 - staff must be of the SAME court as the judge)
+Advocate : 9000000001 or advocate1@test.in   password Adv@1234  (Test Advocate One)
+Advocate : 9000000002 or advocate2@test.in   password Adv@1234  (Test Advocate Two)
+
+A. START A DEPOSITION WITH A REGISTERED ADVOCATE (Judge window)
+  1. Judge Desk > Oral Evidence > Deposition > select a case > New Deposition.
+  2. In "Advocate of Producing Party" type "test" - a list of registered advocates
+     appears. Click "Test Advocate One". A green "Registered" tag appears.
+     (Do the same for Defending Party with "Test Advocate Two" if you like.)
+  3. Leave "Vulnerable Witness" UNTICKED. Proceed and start typing.
+
+B. LIVE DEPOSITION (Advocate window)
+  1. Home > Advocate > log in as Test Advocate One.
+  2. Click the red tile "Live Deposition". The deposition appears marked LIVE.
+  3. Open it. Whatever the judge types appears here within 2-3 seconds.
+  4. Click "Raise Objection", type an objection, click "Send to Court".
+  5. In the Judge window a pop-up shows the objection with a "Copy text" button.
+     Copy it, close the pop-up, paste it in the deposition and type the order.
+  6. The advocate sees the pasted objection and the order in the live text, and
+     under "Your objections" the status changes to "Seen by the Court".
+  Checks:
+   - Test Advocate Two (not selected / not named) should NOT see it
+     (unless he was selected for the other party).
+   - A litigant cannot see live depositions.
+   - Tick "Vulnerable Witness" (Edit witness details) - the deposition disappears
+     from the advocate's list (in camera).
+   - Adjourn or Complete the deposition - it immediately stops being visible and
+     objections cannot be sent.
+
+C. DEMAND (Judge + Staff windows)
+  1. In the Judge typing screen click "Demand". Write which document/portion is
+     required (optional) and click "Send Demand".
+  2. Staff window (any staff screen): a notification "1 demand from the Court"
+     appears within a few seconds with a sound. Click "Open"
+     (or use the "Demands from Court" tile).
+  3. Staff pastes the OCR text (Ctrl+V) or types it, and clicks "Send to Court".
+  4. Judge window: a pop-up shows the text with "Copy text". Copy and paste it
+     into the deposition. Earlier texts/objections can be seen again with the
+     "Received" button in the bottom bar.
+  Checks:
+   - After the deposition is Adjourned or Completed, the Demand button is greyed
+     out, and any demand still pending ends automatically (the staff screen
+     shows it as "Ended automatically").

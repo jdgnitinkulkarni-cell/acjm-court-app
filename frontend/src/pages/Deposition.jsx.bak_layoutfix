@@ -1,0 +1,4086 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import api, { getUser } from "../lib/api";
+import { TopBar } from "./AdminDashboard";
+import useAutosave from "../lib/useAutosave";
+
+const PARTY_OPTIONS = [
+  { value: "complainant", label: "Complainant (ફરિયાદી) (शिकायतकर्ता)" },
+  { value: "applicant", label: "Applicant (અરજદાર) (आवेदक)" },
+  { value: "accused", label: "Accused (આરોપી) (अभियुक्त)" },
+  { value: "opponent", label: "Opponent (સામાવાળા) (प्रतिपक्ष)" },
+];
+const AUTO_OPPOSITE = { complainant: "accused", applicant: "opponent", accused: "complainant", opponent: "applicant" };
+const LANG_OPTIONS = [
+  { value: "gu", label: "Gujarati" },
+  { value: "hi", label: "Hindi" },
+  { value: "en", label: "English" },
+];
+const STAGE_OPTIONS = [
+  { value: "chief", label: "Examination in Chief" },
+  { value: "cross", label: "Cross Examination" },
+  { value: "re-exam", label: "Re-examination" },
+];
+const SPEECH_LOCALE = { gu: "gu-IN", hi: "hi-IN", en: "en-IN" };
+const SKIP_CONFIRM_KEY = () => `dep_skip_confirm_${getUser()?.id || "anon"}`;
+const imgBtnStyle = { background: "#374151", color: "#fff", border: "none", borderRadius: 4, padding: "6px 10px", cursor: "pointer", fontSize: 13, whiteSpace: "nowrap" };
+const activeBtnStyle = { background: "#1e3a8a", color: "#fff", borderColor: "#1e3a8a" };
+const MAX_HISTORY_ENTRIES = 100;
+const SPOKEN_PUNCTUATION = [
+  { mark: ".", phrases: ["full stop", "fullstop", "period", "dot", "પૂર્ણ વિરામ", "પૂર્ણવિરામ", "ફુલ સ્ટોપ", "फुल स्टॉप", "फुलस्टॉप", "पूर्ण विराम", "पूर्णविराम"] },
+  { mark: ",", phrases: ["comma", "કોમા", "અલ્પ વિરામ", "અલ્પવિરામ", "कौमा", "कॉमा", "कोमा", "अल्प विराम", "अल्पविराम"] },
+  { mark: "?", phrases: ["question mark", "questionmark", "પ્રશ્ન ચિહ્ન", "પ્રશ્નચિહ્ન", "પ્રશ્નાર્થ ચિહ્ન", "પ્રશ્નાર્થચિહ્ન", "સવાલ ચિહ્ન", "સવાલચિહ્ન", "ક્વેશ્ચન માર્ક", "ક્વેશ્ચનમાર્ક", "ક્વેસ્ચન માર્ક", "ક્વેસ્ચનમાર્ક", "क्वेश्चन मार्क", "क्वेश्चनमार्क", "क्वेस्चन मार्क", "क्वेस्चनमार्क", "प्रश्न चिन्ह", "प्रश्नचिन्ह", "प्रश्नवाचक चिन्ह", "प्रश्नवाचकचिन्ह"] },
+  { mark: "!", phrases: ["exclamation mark", "exclamation point", "exclamationmark", "exclamationpoint", "ઉદગાર ચિહ્ન", "ઉદગારચિહ્ન", "વિસ્મય ચિહ્ન", "વિસ્મયચિહ્ન", "એક્સક્લેમેશન માર્ક", "એક્સક્લેમેશનમાર્ક", "એક્સક્લેમેસન માર્ક", "એક્સક્લેમેસનમાર્ક", "એક્સપ્લેમેશન માર્ક", "એક્સપ્લેમેશનમાર્ક", "એક્સપ્લેમેસન માર્ક", "એક્સપ્લેમેસનમાર્ક", "એક્સપ્લેમેસન", "विस्मयादिबोधक चिन्ह", "विस्मयादिबोधकचिन्ह", "विस्मय चिन्ह", "विस्मयचिन्ह", "एक्सक्लेमेशन मार्क", "एक्सक्लेमेशनमार्क", "एक्सक्लेमेसन मार्क", "एक्सक्लेमेसनमार्क"] },
+];
+const SPOKEN_PARAGRAPH_COMMANDS = [
+  "next paragraph",
+  "new paragraph",
+  "new para",
+  "next para",
+  "નેક્સ્ટ પેરાગ્રાફ",
+  "નેક્સ્ટ પેરા",
+  "નવો પેરાગ્રાફ",
+  "નવા પેરાગ્રાફ",
+  "નવો paragraph",
+  "નવો para",
+  "નવો ફકરો",
+  "નવા ફકરો",
+  "આગળનો ફકરો",
+  "अगलानो फकरो",
+  "अगला पैराग्राफ",
+  "नया पैराग्राफ",
+  "नया अनुच्छेद",
+  "नवो paragraph",
+  "नवो para",
+  "नवो पैराग्राफ",
+  "नवो फकरो",
+];
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function spokenPhrasePattern(phrase) {
+  return phrase
+    .trim()
+    .split(/[\s\u00a0]+/)
+    .map(escapeRegExp)
+    .join("[\\s\\u00a0]*");
+}
+
+function normalizeSpokenPunctuationText(text = "") {
+  let normalized = text;
+  SPOKEN_PUNCTUATION.forEach(({ mark, phrases }) => {
+    phrases.forEach((phrase) => {
+      normalized = normalized.replace(new RegExp(`(^|[\\s\\u00a0])${spokenPhrasePattern(phrase)}(?=$|[\\s\\u00a0.,!?])`, "giu"), `$1${mark}`);
+    });
+  });
+  return normalized
+    .replace(/\s+([,.?!])/g, "$1")
+    .replace(/([,.?!])(?=\S)/g, "$1 ");
+}
+
+function normalizeSpokenEditorCommands(text = "") {
+  let normalized = normalizeSpokenPunctuationText(text);
+  SPOKEN_PARAGRAPH_COMMANDS.forEach((phrase) => {
+    normalized = normalized.replace(new RegExp(`(^|[\\s\\u00a0])${spokenPhrasePattern(phrase)}(?=$|[\\s\\u00a0.,!?])`, "giu"), "$1\n\n");
+  });
+  return normalized
+    .replace(/[ \t\u00a0]*\n[ \t\u00a0]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+const SAFE_ENGLISH_SPELLING_CORRECTIONS = [
+  ["accus", "accused"],
+  ["accussed", "accused"],
+  ["defendent", "defendant"],
+  ["complainent", "complainant"],
+  ["begining", "beginning"],
+  ["writting", "writing"],
+  ["recieve", "receive"],
+  ["seperate", "separate"],
+  ["occured", "occurred"],
+  ["teh", "the"],
+];
+
+const LEGAL_LANGUAGE_CORRECTIONS = [
+  {
+    pattern: /\bthe accused wants\s+(?:and|an)\s+(?:adjurnvan date|adjournment|adjourn date)\s+as\s+(?:he is counsel|his counsel|he is council)\s+is\s+not\s+present\s+today\b/gi,
+    replacement: "the accused seeks an adjournment as his counsel is not present today",
+  },
+  { pattern: /\bthe accused wants\s+(?:and|an)\s+adjournment\b/gi, replacement: "the accused seeks an adjournment" },
+  { pattern: /\bthe accused wants\s+adjournment\b/gi, replacement: "the accused seeks an adjournment" },
+  { pattern: /\bbefore the score\b/gi, replacement: "before the Court" },
+  { pattern: /\badjurnvan date\b/gi, replacement: "adjournment" },
+  { pattern: /\badjurnment\b/gi, replacement: "adjournment" },
+  { pattern: /\badjourn date\b/gi, replacement: "adjournment" },
+  { pattern: /\bwith\s+in\b/gi, replacement: "within" },
+  { pattern: /\bapplication\s+file\s+by\b/gi, replacement: "application filed by" },
+  { pattern: /\bcomplaint\s+of\s+the\s+matter\s+has\s+challenged\b/gi, replacement: "complainant of the matter has challenged" },
+  { pattern: /\bcomplain\s+and\s+said\b/gi, replacement: "complainant side" },
+  { pattern: /\bcomplain\s+witness\b/gi, replacement: "complainant witness" },
+  { pattern: /\bye\s+mentally\b/gi, replacement: "vehemently" },
+  { pattern: /\bhands\s+this\s+court\b/gi, replacement: "Hence, this Court" },
+  { pattern: /\ballow\s+the\s+application\s+has\s+the\s+application\s+is\s+rejected\b/gi, replacement: "allow the application and the application is rejected" },
+  { pattern: /\bas\s+appear\s+before\s+the\s+Court\b/g, replacement: "has appeared before the Court" },
+  { pattern: /\breached\s+to\s+the\s+final\s+adjudication\b/gi, replacement: "reached the stage of final adjudication" },
+  { pattern: /\bseeking\s+and\s+adjournment\b/gi, replacement: "seeking an adjournment" },
+  { pattern: /\bfor\s+and\s+for\s+conducting\b/gi, replacement: "for conducting" },
+  { pattern: /\bcouncil\b/gi, replacement: "counsel" },
+  { pattern: /\bhe is counsel\b/gi, replacement: "his counsel" },
+  { pattern: /\bthe court\b/gi, replacement: "the Court" },
+  { pattern: /\bhon'?ble court\b/gi, replacement: "Hon'ble Court" },
+  { pattern: /આજ\s+રોજ/g, replacement: "આજરોજ" },
+  { pattern: /મુદ્તની/g, replacement: "મુદ્દતની" },
+  { pattern: /મુદ્ત/g, replacement: "મુદ્દત" },
+  { pattern: /હાલના\s+કામે\s+કરેલું\s+રેકોર્ડ/g, replacement: "હાલના કામે કરેલો રેકોર્ડ" },
+  { pattern: /ઘણી\s+મુદ્દે\s+આપવામાં\s+આવેલ/g, replacement: "ઘણી મુદ્દતો આપવામાં આવેલ" },
+  { pattern: /आज\s+रोज/g, replacement: "आज रोज़" },
+  { pattern: /मुदत/g, replacement: "मुद्दत" },
+  { pattern: /मुलजिम/g, replacement: "अभियुक्त" },
+];
+
+function preserveReplacementCase(original, replacement) {
+  if (!original) return replacement;
+  if (original === original.toUpperCase()) return replacement.toUpperCase();
+  if (original[0] === original[0].toUpperCase()) {
+    return replacement[0].toUpperCase() + replacement.slice(1);
+  }
+  return replacement;
+}
+
+function applySafeEnglishSpellingCorrections(text = "") {
+  return SAFE_ENGLISH_SPELLING_CORRECTIONS.reduce((current, [wrong, right]) => (
+    current.replace(new RegExp(`\\b${escapeRegExp(wrong)}\\b`, "gi"), (match) => preserveReplacementCase(match, right))
+  ), text);
+}
+
+function applyLegalLanguageCorrections(text = "") {
+  return LEGAL_LANGUAGE_CORRECTIONS.reduce((current, { pattern, replacement }) => (
+    current.replace(pattern, replacement)
+  ), text);
+}
+
+function capitalizeEnglishSentenceStarts(text = "") {
+  return String(text || "").replace(/(^|[.!?]\s+)([a-z])/g, (match, lead, letter) => lead + letter.toUpperCase());
+}
+
+function normalizeProofreadSpacingAndPunctuation(text = "") {
+  return String(text || "")
+    .replace(/[\t\u00a0 ]{2,}/g, " ")
+    .replace(/\s+([,.?!])/g, "$1")
+    .replace(/([,.?!])(?=\S)/g, "$1 ")
+    .replace(/\btoday\s+(the\s+(?:accused|complainant|witness)\b)/gi, "today. $1")
+    .replace(/\btoday\s+(the\s+(?:advocate|counsel)\b)/gi, "today. $1")
+    .replace(/\bpresent\s+(the\s+(?:accused|complainant|witness)\b)/gi, "present. $1")
+    .replace(/\bpresent\s+(the\s+(?:advocate|counsel)\b)/gi, "present. $1")
+    .replace(/\bCourt\s+(the\s+(?:accused|complainant|witness)\b)/g, "Court. $1");
+}
+
+function applySafeGrammarCorrections(text = "") {
+  return capitalizeEnglishSentenceStarts(
+    normalizeProofreadSpacingAndPunctuation(
+      applyLegalLanguageCorrections(
+        applySafeEnglishSpellingCorrections(
+          normalizeSpokenEditorCommands(text)
+        )
+      )
+    )
+  );
+}
+
+function normalizeProofreadComparison(text = "") {
+  return String(text || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([,.?!])/g, "$1")
+    .replace(/([,.?!])(?=\S)/g, "$1 ")
+    .trim();
+}
+
+function splitProofreadSegments(text = "") {
+  const value = String(text || "");
+  const segments = [];
+  let start = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const isSentenceEnd = char === "." || char === "?" || char === "!" || char === "\n";
+    if (!isSentenceEnd) continue;
+
+    let end = index + 1;
+    while (end < value.length && /[\s\u00a0]/.test(value[end])) end += 1;
+    segments.push({ start, end, text: value.slice(start, end) });
+    start = end;
+  }
+
+  if (start < value.length) {
+    segments.push({ start, end: value.length, text: value.slice(start) });
+  }
+
+  return segments.filter((segment) => /[\p{L}\p{N}]/u.test(segment.text));
+}
+
+function normalizeSpokenPunctuationInElement(root) {
+  if (!root) return false;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      if (!parent || parent.closest(".dep-img-wrap,.dep-table-drop-marker,script,style")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  let changed = false;
+  nodes.forEach((node) => {
+    const next = normalizeSpokenPunctuationText(node.nodeValue || "");
+    if (next !== node.nodeValue) {
+      node.nodeValue = next;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function applyLiveGrammarCorrectionsInTextNode(node, offset) {
+  if (!node || node.nodeType !== Node.TEXT_NODE) return { changed: false, offset };
+  const beforeText = node.nodeValue || "";
+  const beforeCaretText = beforeText.slice(0, offset);
+  const afterText = capitalizeEnglishSentenceStarts(normalizeSpokenPunctuationText(beforeText));
+  if (afterText === beforeText) return { changed: false, offset };
+  node.nodeValue = afterText;
+  return {
+    changed: true,
+    offset: Math.min(capitalizeEnglishSentenceStarts(normalizeSpokenPunctuationText(beforeCaretText)).length, afterText.length),
+  };
+}
+
+function partyName(c) {
+  const a = c.complainant_name || "-";
+  const b = c.accused_name || "-";
+  return `${a} Vs ${b}`;
+}
+
+// Type-to-filter case picker. Renders nothing until the user types at least
+// one character, so it stays fast and usable even with a docket of
+// thousands of cases (no giant list is ever rendered at once).
+function CaseSearchAdd({ cases, selected, onAdd }) {
+  const [term, setTerm] = useState("");
+  const [open, setOpen] = useState(false);
+  const matches = useMemo(() => {
+    const t = term.trim().toLowerCase();
+    if (!t) return [];
+    return cases
+      .filter((c) => !selected.includes(c.case_number))
+      .filter((c) => c.case_number.toLowerCase().includes(t) || partyName(c).toLowerCase().includes(t))
+      .slice(0, 30);
+  }, [term, cases, selected]);
+
+  const pick = (num) => {
+    onAdd(num);
+    setTerm("");
+    setOpen(false);
+  };
+
+  return (
+    <div style={{ position: "relative", maxWidth: 520 }}>
+      <input
+        value={term}
+        onChange={(e) => { setTerm(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Type a case number to search…"
+        data-testid="case-search-input"
+        style={{ width: "100%", border: "1.5px solid var(--border)", borderRadius: 4, padding: "10px 12px", fontFamily: "inherit", fontSize: 15 }}
+      />
+      {open && term.trim() && (
+        <div
+          style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30,
+            background: "#fff", border: "1px solid #777", boxShadow: "0 8px 18px rgba(0,0,0,.12)",
+            maxHeight: 260, overflowY: "auto",
+          }}
+        >
+          {matches.length === 0 && <div style={{ padding: "10px 12px", color: "#6b7280" }}>No matching case found.</div>}
+          {matches.map((c) => (
+            <div
+              key={c.case_number}
+              // onMouseDown+preventDefault keeps focus (and the open dropdown)
+              // alive until the click actually registers — without this, the
+              // input's blur fires first and closes the list before the
+              // click can land (the exact bug found in the Application
+              // complainant-selection combo).
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(c.case_number)}
+              style={{ padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #f1f1f1" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#eef2ff")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+            >
+              <strong>{c.case_number}</strong> — {partyName(c)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Small reusable mic button for any plain <input>/<textarea> outside the main
+// typing page (e.g. the Reason-to-Adjourn field). Uses the same Web Speech
+// API pattern as the main Typing Page's mic.
+function FieldMic({ value, onChange, lang = "gu" }) {
+  const [on, setOn] = useState(false);
+  const recRef = useRef(null);
+  useEffect(() => () => recRef.current?.stop(), []);
+  const toggle = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert("Voice typing is not supported in this browser."); return; }
+    if (on) { recRef.current?.stop(); setOn(false); return; }
+    const rec = new SR();
+    rec.lang = SPEECH_LOCALE[lang] || "gu-IN";
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (ev) => {
+      let text = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) text += ev.results[i][0].transcript;
+      }
+      if (text) onChange((value ? value + " " : "") + normalizeSpokenEditorCommands(text.trim()));
+    };
+    rec.onend = () => { if (on) rec.start(); };
+    rec.start();
+    recRef.current = rec;
+    setOn(true);
+  };
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      title="Voice typing"
+      aria-label="Voice typing"
+      style={{
+        marginLeft: 8, width: 38, height: 38, borderRadius: "50%", border: "none",
+        background: on ? "#16a34a" : "#dc2626", color: "#fff", cursor: "pointer",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      }}
+    >
+      🎙
+    </button>
+  );
+}
+
+// Simple Word-style crop tool: shows the image at a fixed display size with
+// a draggable/resizable crop rectangle overlaid on top. On Apply, the
+// selected region is drawn onto a canvas at the image's full natural
+// resolution and the <img> element's src is replaced with the result.
+function ImageCropModal({ img, onCancel, onApply }) {
+  const DISPLAY_W = 480;
+  const naturalW = img.naturalWidth || img.width || 480;
+  const naturalH = img.naturalHeight || img.height || 320;
+  const scale = DISPLAY_W / naturalW;
+  const displayH = naturalH * scale;
+
+  const [rect, setRect] = useState({ x: displayH ? DISPLAY_W * 0.1 : 0, y: displayH * 0.1, w: DISPLAY_W * 0.8, h: displayH * 0.8 });
+  const dragRef = useRef(null);
+
+  const startDrag = (mode) => (e) => {
+    e.preventDefault();
+    dragRef.current = { mode, startX: e.clientX, startY: e.clientY, rect: { ...rect } };
+  };
+  useEffect(() => {
+    const onMove = (e) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = e.clientX - d.startX;
+      const dy = e.clientY - d.startY;
+      setRect(() => {
+        let { x, y, w, h } = d.rect;
+        if (d.mode === "move") { x = d.rect.x + dx; y = d.rect.y + dy; }
+        else if (d.mode === "se") { w = Math.max(20, d.rect.w + dx); h = Math.max(20, d.rect.h + dy); }
+        else if (d.mode === "nw") { x = d.rect.x + dx; y = d.rect.y + dy; w = Math.max(20, d.rect.w - dx); h = Math.max(20, d.rect.h - dy); }
+        x = Math.max(0, Math.min(x, DISPLAY_W - 10));
+        y = Math.max(0, Math.min(y, displayH - 10));
+        w = Math.min(w, DISPLAY_W - x);
+        h = Math.min(h, displayH - y);
+        return { x, y, w, h };
+      });
+    };
+    const onUp = () => { dragRef.current = null; };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+  }, [displayH]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const apply = () => {
+    const canvas = document.createElement("canvas");
+    const sx = rect.x / scale, sy = rect.y / scale, sw = rect.w / scale, sh = rect.h / scale;
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    onApply(canvas.toDataURL("image/png"));
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: DISPLAY_W + 60 }}>
+        <h3>Crop Image</h3>
+        <p className="hint">Drag the box to move it, or drag its corners to resize, then click Apply.</p>
+        <div style={{ position: "relative", width: DISPLAY_W, height: displayH, background: "#000" }}>
+          <img src={img.src} alt="" style={{ width: DISPLAY_W, height: displayH, display: "block", opacity: 0.5 }} />
+          <div
+            onMouseDown={startDrag("move")}
+            style={{
+              position: "absolute", left: rect.x, top: rect.y, width: rect.w, height: rect.h,
+              border: "2px dashed #fff", cursor: "move", boxShadow: "0 0 0 2000px rgba(0,0,0,.4)",
+            }}
+          >
+            <div onMouseDown={(e) => { e.stopPropagation(); startDrag("nw")(e); }}
+              style={{ position: "absolute", top: -6, left: -6, width: 12, height: 12, background: "#fff", cursor: "nwse-resize" }} />
+            <div onMouseDown={(e) => { e.stopPropagation(); startDrag("se")(e); }}
+              style={{ position: "absolute", bottom: -6, right: -6, width: 12, height: 12, background: "#fff", cursor: "nwse-resize" }} />
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" onClick={apply}>Apply</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const WIZARD_STORAGE_KEY = "dep_wizard_state_v1";
+function loadWizardState() {
+  try { return JSON.parse(sessionStorage.getItem(WIZARD_STORAGE_KEY) || "null"); }
+  catch (e) { return null; }
+}
+function saveWizardState(state) {
+  try { sessionStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify(state)); }
+  catch (e) { /* storage unavailable — non-fatal, just means data won't survive navigation */ }
+}
+function clearWizardState() {
+  try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch (e) { /* ignore */ }
+}
+
+function countDepositionWords(text) {
+  const normalized = String(text || "").replace(/\u00a0/g, " ").trim();
+  if (!normalized) return 0;
+  return (normalized.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)?/gu) || []).length;
+}
+
+function parseDepositionDateTime(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+  const match = raw.match(/^(\d{1,2}):(\d{2}):(\d{2}),\s*(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, hh, mm, ss, dd, mo, yyyy] = match;
+  const dt = new Date(Number(yyyy), Number(mo) - 1, Number(dd), Number(hh), Number(mm), Number(ss));
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function formatElapsedTime(start, end = new Date()) {
+  if (!start) return "00:00:00";
+  const diff = Math.max(0, end.getTime() - start.getTime());
+  const h = String(Math.floor(diff / 3600000)).padStart(2, "0");
+  const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
+  const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+
+const PAGE_WIDTH_PX = 794;
+const PAGE_HEIGHT_PX = 1123;
+const MIN_PAGE_MARGIN_PX = 24;
+const MAX_PAGE_MARGIN_PX = 160;
+const DEFAULT_PAGE_MARGINS = { top: 70, right: 70, bottom: 70, left: 70 };
+const RULER_SETTINGS_KEY = "dep_ruler_settings_v1";
+
+function clampNumber(value, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
+function loadRulerSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RULER_SETTINGS_KEY) || "null");
+    return {
+      margins: { ...DEFAULT_PAGE_MARGINS, ...(saved?.margins || {}) },
+      tabStops: Array.isArray(saved?.tabStops) ? saved.tabStops : [96, 192, 288, 384],
+    };
+  } catch (e) {
+    return { margins: DEFAULT_PAGE_MARGINS, tabStops: [96, 192, 288, 384] };
+  }
+}
+
+export default function DepositionWizard() {
+  const navigate = useNavigate();
+  const user = getUser();
+  const courts = user?.courts || [];
+  const saved = loadWizardState() || {};
+  const [courtId, setCourtId] = useState(saved.courtId || courts[0]?.id || "");
+  const [cases, setCases] = useState([]);
+  const [selected, setSelected] = useState(saved.selected || []);
+  const [activeCaseNumber, setActiveCaseNumber] = useState(saved.activeCaseNumber || "");
+  const [showLinked, setShowLinked] = useState(false);
+  const [step, setStep] = useState(saved.step || "select-cases");
+  const [mode, setMode] = useState(saved.mode || null);
+  const [clientStartTime, setClientStartTime] = useState(saved.clientStartTime || null);
+  const [existingList, setExistingList] = useState([]);
+  const [existingId, setExistingId] = useState(saved.existingId || "");
+  const [msg, setMsg] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const [form, setForm] = useState(saved.form || {
+    exhibit_number: "", sr_no: "", witness_name: "", father_husband_name: "",
+    religion: "", age: "", occupation: "", address: "", contact_no: "",
+    language: "gu", stage: "chief", producing_party: "", defending_party: "",
+    advocate_producing: "", advocate_defending: "", av_conferencing: false, vulnerable_witness: false,
+  });
+  // Per-case Exhibit No. / Sr. No. overrides, keyed by case_number, for cases
+  // other than the primary one — the same witness can carry different
+  // exhibit/serial numbers across joint cases.
+  const [caseSpecificDetails, setCaseSpecificDetails] = useState(saved.caseSpecificDetails || {});
+
+  // Persist on every change, so leaving this page (Back button — whether the
+  // wizard's own, the shared TopBar's, or the browser's — and unmounting the
+  // component) and returning restores exactly where the user left off,
+  // instead of silently discarding selected cases and typed-in details.
+  useEffect(() => {
+    saveWizardState({ courtId, selected, activeCaseNumber, step, mode, clientStartTime, existingId, form, caseSpecificDetails });
+  }, [courtId, selected, activeCaseNumber, step, mode, clientStartTime, existingId, form, caseSpecificDetails]);
+
+  useEffect(() => {
+    if (!courtId) return;
+    api.get("/local-cases", { params: { court_id: courtId } }).then(({ data }) => setCases(data));
+  }, [courtId]);
+
+  useEffect(() => {
+    // If we restored into the form step in "existing" mode (e.g. after
+    // navigating away and back), the witness list itself wasn't persisted —
+    // re-fetch it so the dropdown isn't empty.
+    if (step === "form" && mode === "existing" && existingList.length === 0 && activeCaseNumber && courtId) {
+      api.get("/depositions/existing-witnesses", { params: { case_number: activeCaseNumber, court_id: courtId } })
+        .then(({ data }) => setExistingList(data));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleCase = (num) => {
+    setSelected((prev) => (prev.includes(num) ? prev.filter((c) => c !== num) : [...prev, num]));
+    if (!activeCaseNumber) setActiveCaseNumber(num);
+  };
+
+  useEffect(() => {
+    if (selected.length > 0 && !selected.includes(activeCaseNumber)) setActiveCaseNumber(selected[0]);
+    if (selected.length === 0) setActiveCaseNumber("");
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeCase = cases.find((c) => c.case_number === activeCaseNumber);
+  const linkedCases = cases.filter((c) => selected.includes(c.case_number) && c.case_number !== activeCaseNumber);
+
+  const goToModeStep = () => {
+    if (selected.length === 0) { setMsg("Please select at least one case."); return; }
+    setMsg("");
+    setStep("mode");
+  };
+
+  const goBackFromWizard = () => {
+    setMsg("");
+    if (step === "select-cases") {
+      navigate("/judge-desk/oral-evidence");
+      return;
+    }
+    if (step === "mode") {
+      setStep("select-cases");
+      return;
+    }
+    if (step === "form") {
+      setStep("mode");
+      return;
+    }
+    if (step === "confirm") {
+      setStep("form");
+    }
+  };
+
+  const chooseMode = async (m) => {
+    setMode(m);
+    setClientStartTime(new Date().toISOString());
+    setExistingId("");
+    if (m === "existing") {
+      const { data } = await api.get("/depositions/existing-witnesses", {
+        params: { case_number: activeCaseNumber, court_id: courtId },
+      });
+      setExistingList(data);
+    }
+    setStep("form");
+  };
+
+  const pickExistingWitness = (id) => {
+    setExistingId(id);
+    const w = existingList.find((x) => x.id === id);
+    if (w) {
+      const language = w.language || "gu";
+      setForm((f) => ({
+        ...f,
+        exhibit_number: w.exhibit_number || "",
+        sr_no: w.sr_no || "",
+        witness_name: w.witness_name || "",
+        father_husband_name: w.father_husband_name || "",
+        religion: w.religion || "",
+        age: w.age || "",
+        occupation: w.occupation || "",
+        address: w.address || "",
+        contact_no: w.contact_no || "",
+        language,
+        stage: w.adjourn_for === "further_chief" ? "chief" : (w.stage || "cross"),
+        producing_party: w.producing_party || "",
+        defending_party: w.defending_party || "",
+        advocate_producing: w.advocate_producing || "",
+        advocate_defending: w.advocate_defending || "",
+        av_conferencing: !!w.av_conferencing,
+        vulnerable_witness: !!w.vulnerable_witness,
+      }));
+      setCaseSpecificDetails(w.case_specific_details || {});
+      localStorage.setItem("acjm_mic_lang", language);
+    }
+  };
+
+  const setProducing = (val) => {
+    setForm((f) => ({ ...f, producing_party: val, defending_party: AUTO_OPPOSITE[val] || f.defending_party }));
+  };
+
+  const canProceedForm = () => {
+    if (mode === "existing" && !existingId) return false;
+    if (!form.exhibit_number || !form.sr_no || !form.witness_name) return false;
+    if (!form.producing_party || !form.defending_party) return false;
+    return true;
+  };
+
+  const openConfirm = () => {
+    if (!canProceedForm()) { setMsg("Please complete all required fields."); return; }
+    setMsg("");
+    if (localStorage.getItem(SKIP_CONFIRM_KEY()) === "1") { doCreate(); return; }
+    setStep("confirm");
+  };
+
+  const doCreate = async () => {
+    setSubmitting(true);
+    setMsg("");
+    try {
+      const payload = {
+        court_id: courtId, case_ids: selected, primary_case_number: activeCaseNumber, mode,
+        resume_of: mode === "existing" ? existingId : null, client_start_time_iso: clientStartTime,
+        case_specific_details: caseSpecificDetails, ...form,
+      };
+      const { data } = await api.post("/depositions", payload);
+      clearWizardState();
+      navigate(`/judge-desk/oral-evidence/deposition/type/${data.id}`);
+    } catch (e) {
+      setMsg(e.response?.data?.detail || "Failed to start deposition");
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="app-shell">
+      <TopBar title="Deposition" onBack={goBackFromWizard} />
+      <div className={`page dep-entry-lang-${form.language || "gu"}`} data-testid="deposition-wizard">
+        {courts.length > 1 && (
+          <div className="form-grid" style={{ marginBottom: 16 }}>
+            <label>Court</label>
+            <select value={courtId} onChange={(e) => { setCourtId(e.target.value); setSelected([]); }}>
+              {courts.map((c) => <option key={c.id} value={c.id}>{c.english?.court_name}</option>)}
+            </select>
+          </div>
+        )}
+
+        {step === "select-cases" && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h1 style={{ margin: 0 }}>Select Case(s)</h1>
+              {selected.length > 0 && (
+                <button
+                  className="btn btn-outline"
+                  style={{ padding: "4px 10px" }}
+                  onClick={() => { if (window.confirm("Clear the selected case(s) and any details entered so far?")) { clearWizardState(); window.location.reload(); } }}
+                >
+                  Start Over
+                </button>
+              )}
+            </div>
+            <p className="hint">
+              Start typing a case number to search — the list narrows as you type. Click a result to add
+              it. If this single deposition is to be placed in multiple joint cases, add all of them; your
+              earlier selections are remembered as you navigate.
+            </p>
+            <CaseSearchAdd
+              cases={cases}
+              selected={selected}
+              onAdd={(num) => toggleCase(num)}
+            />
+            {selected.length > 0 && (
+              <table className="entries" style={{ marginTop: 16 }}>
+                <thead><tr><th>Case Number</th><th>Party Name</th><th></th></tr></thead>
+                <tbody>
+                  {selected.map((num) => {
+                    const c = cases.find((x) => x.case_number === num) || { case_number: num };
+                    return (
+                      <tr key={num}>
+                        <td>{num}</td>
+                        <td>{partyName(c)}</td>
+                        <td><button className="btn btn-outline" style={{ padding: "4px 10px" }} onClick={() => toggleCase(num)}>Remove</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            {cases.length === 0 && <p className="hint">No cases found for this Court.</p>}
+            {msg && <p className="error">{msg}</p>}
+            <div className="form-actions">
+              <button className="btn btn-secondary" onClick={goBackFromWizard}>Back</button>
+              <button className="btn btn-primary" onClick={goToModeStep}>Continue</button>
+            </div>
+          </>
+        )}
+
+        {step === "mode" && (
+          <>
+            <p className="hint" style={{ marginBottom: 2 }}>Case No: <strong>{activeCaseNumber}</strong></p>
+            <h1>{partyName(activeCase || {})}</h1>
+            {linkedCases.length > 0 && (
+              <p>
+                <button className="btn btn-outline" style={{ padding: "4px 10px" }} onClick={() => setShowLinked((s) => !s)}>
+                  {showLinked ? "Hide" : "See the details of other linked cases"}
+                </button>
+              </p>
+            )}
+            {showLinked && <ul>{linkedCases.map((c) => <li key={c.case_number}>{c.case_number} — {partyName(c)}</li>)}</ul>}
+            <div className="dashboard-grid" style={{ marginTop: 20 }}>
+              <div className="tile purple" onClick={() => chooseMode("new")}>New Deposition</div>
+              <div className="tile blue" onClick={() => chooseMode("existing")}>Incomplete Deposition</div>
+            </div>
+            <div className="form-actions"><button className="btn btn-secondary" onClick={goBackFromWizard}>Back</button></div>
+          </>
+        )}
+
+        {step === "form" && (
+          <>
+            <h1>{mode === "new" ? "New Deposition" : "Incomplete Deposition"}</h1>
+
+            {mode === "existing" && (
+              <div className="form-grid">
+                <label>Select Witness</label>
+                <select value={existingId} onChange={(e) => pickExistingWitness(e.target.value)}>
+                  <option value="">-- select witness --</option>
+                  {existingList.map((w) => (
+                    <option key={w.id} value={w.id}>{w.witness_name} (Exh. {w.exhibit_number}, Sr. {w.sr_no})</option>
+                  ))}
+                </select>
+                {existingList.length === 0 && <span className="hint">No incomplete depositions found for this case.</span>}
+              </div>
+            )}
+
+            {(mode === "new" || existingId) && (
+              <div className="form-grid">
+                <label>Name of Witness</label>
+                <input value={form.witness_name} onChange={(e) => setForm({ ...form, witness_name: e.target.value })} />
+                <label>Father's / Husband's Name</label>
+                <input value={form.father_husband_name} onChange={(e) => setForm({ ...form, father_husband_name: e.target.value })} />
+                <label>Religion</label>
+                <input value={form.religion} onChange={(e) => setForm({ ...form, religion: e.target.value })} />
+                <label>Age</label>
+                <input value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
+                <label>Occupation</label>
+                <input value={form.occupation} onChange={(e) => setForm({ ...form, occupation: e.target.value })} />
+                <label>Address</label>
+                <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                <label>Contact No. (optional)</label>
+                <input value={form.contact_no} onChange={(e) => setForm({ ...form, contact_no: e.target.value })} />
+                <label>Language of Deposition</label>
+                <select
+                  value={form.language}
+                  onChange={(e) => {
+                    setForm({ ...form, language: e.target.value });
+                    // Sync the shared voice-typing mic to this language right
+                    // away, so it's already correct for typing the Name/
+                    // Address/etc. fields above too, not just once the
+                    // typing page itself loads.
+                    localStorage.setItem("acjm_mic_lang", e.target.value);
+                  }}
+                >
+                  {LANG_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
+
+            {(mode === "new" || existingId) && (
+              <div style={{ marginTop: 16, padding: 14, border: "1px solid var(--border)", borderRadius: 6, background: "#fafafa" }}>
+                <p className="hint" style={{ marginTop: 0 }}>
+                  {selected.length > 1
+                    ? <>Enter this witness's <strong>Exhibit Number</strong> and <strong>Sr. No.</strong> for each linked case below — the same witness can carry different numbers in different cases.</>
+                    : <>Enter this witness's <strong>Exhibit Number</strong> and <strong>Sr. No.</strong> for this case.</>}
+                </p>
+                {selected.map((num) => (
+                  <div key={num} className="form-grid" style={{ marginBottom: 8 }}>
+                    <label>{num} — Exhibit No.</label>
+                    <input
+                      value={num === activeCaseNumber ? form.exhibit_number : (caseSpecificDetails[num]?.exhibit_number || "")}
+                      onChange={(e) => {
+                        if (num === activeCaseNumber) setForm({ ...form, exhibit_number: e.target.value });
+                        else setCaseSpecificDetails((prev) => ({ ...prev, [num]: { ...prev[num], exhibit_number: e.target.value } }));
+                      }}
+                    />
+                    <label>{num} — Sr. No.</label>
+                    <input
+                      value={num === activeCaseNumber ? form.sr_no : (caseSpecificDetails[num]?.sr_no || "")}
+                      onChange={(e) => {
+                        if (num === activeCaseNumber) setForm({ ...form, sr_no: e.target.value });
+                        else setCaseSpecificDetails((prev) => ({ ...prev, [num]: { ...prev[num], sr_no: e.target.value } }));
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="form-grid" style={{ marginTop: 12 }}>
+              <label>Stage of Deposition</label>
+              <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
+                {STAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <label>Producing Party</label>
+              <select value={form.producing_party} onChange={(e) => setProducing(e.target.value)}>
+                <option value="">-- select --</option>
+                {PARTY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <label>Defending Party</label>
+              <select value={form.defending_party} onChange={(e) => setForm({ ...form, defending_party: e.target.value })}>
+                <option value="">-- select --</option>
+                {PARTY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <label>Advocate of Producing Party</label>
+              <input value={form.advocate_producing} onChange={(e) => setForm({ ...form, advocate_producing: e.target.value })} />
+              <label>Advocate of Defending Party</label>
+              <input value={form.advocate_defending} onChange={(e) => setForm({ ...form, advocate_defending: e.target.value })} />
+            </div>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
+              <input type="checkbox" checked={form.av_conferencing} onChange={(e) => setForm({ ...form, av_conferencing: e.target.checked })} />
+              The deposition of the witness is recorded through audio-video conferencing
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+              <input type="checkbox" checked={form.vulnerable_witness} onChange={(e) => setForm({ ...form, vulnerable_witness: e.target.checked })} />
+              Vulnerable Witness
+            </label>
+
+            <p className="hint" style={{ marginTop: 14 }}>
+              Note: the <strong>Producing Party</strong> is the party who has brought the witness for examination;
+              the <strong>Defending Party</strong> is the party who is about to cross-examine the witness.
+            </p>
+
+            {msg && <p className="error">{msg}</p>}
+            <div className="form-actions">
+              <button className="btn btn-secondary" onClick={goBackFromWizard}>Back</button>
+              <button className="btn btn-primary" onClick={openConfirm} disabled={submitting}>Proceed</button>
+            </div>
+          </>
+        )}
+
+        {step === "confirm" && (
+          <div className="modal-backdrop">
+            <div className="modal">
+              <h3>Confirm Details</h3>
+              <table className="entries">
+                <tbody>
+                  <tr><td>Witness</td><td>{form.witness_name}</td></tr>
+                  <tr><td>Exhibit No.</td><td>{form.exhibit_number}</td></tr>
+                  <tr><td>Stage</td><td>{STAGE_OPTIONS.find((o) => o.value === form.stage)?.label}</td></tr>
+                  <tr><td>Producing Party</td><td>{PARTY_OPTIONS.find((o) => o.value === form.producing_party)?.label}</td></tr>
+                  <tr><td>Defending Party</td><td>{PARTY_OPTIONS.find((o) => o.value === form.defending_party)?.label}</td></tr>
+                  <tr><td>Language</td><td>{LANG_OPTIONS.find((o) => o.value === form.language)?.label}</td></tr>
+                </tbody>
+              </table>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0" }}>
+                <input type="checkbox" id="skip-confirm-cb" />
+                Don't show this confirmation again
+              </label>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setStep("form")}>Edit</button>
+                <button
+                  className="btn btn-primary"
+                  disabled={submitting}
+                  onClick={() => {
+                    if (document.getElementById("skip-confirm-cb")?.checked) localStorage.setItem(SKIP_CONFIRM_KEY(), "1");
+                    doCreate();
+                  }}
+                >
+                  Proceed
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === "form" && localStorage.getItem(SKIP_CONFIRM_KEY()) === "1" && (
+          <p style={{ marginTop: 10 }}>
+            <button className="btn btn-outline" style={{ padding: "4px 10px" }} onClick={() => localStorage.removeItem(SKIP_CONFIRM_KEY())}>
+              Re-enable confirmation popup
+            </button>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Edit Witness Details (reached via Back from the Typing Page, so the last
+// entered witness data is reviewable/correctable rather than discarded)
+// ============================================================================
+
+export function DepositionEditDetails() {
+  const { depId } = useParams();
+  const navigate = useNavigate();
+  const [dep, setDep] = useState(null);
+  const [form, setForm] = useState(null);
+  const [caseSpecificDetails, setCaseSpecificDetails] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    api.get(`/depositions/${depId}`).then(({ data }) => {
+      setDep(data);
+      setForm({
+        exhibit_number: data.exhibit_number || "", sr_no: data.sr_no || "",
+        witness_name: data.witness_name || "", father_husband_name: data.father_husband_name || "",
+        religion: data.religion || "", age: data.age || "", occupation: data.occupation || "",
+        address: data.address || "", contact_no: data.contact_no || "",
+        stage: data.stage || "chief",
+        producing_party: data.producing_party || "", defending_party: data.defending_party || "",
+        advocate_producing: data.advocate_producing || "", advocate_defending: data.advocate_defending || "",
+        av_conferencing: !!data.av_conferencing, vulnerable_witness: !!data.vulnerable_witness,
+        language: data.language || "gu",
+      });
+      setCaseSpecificDetails(data.case_specific_details || {});
+    });
+  }, [depId]);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg("");
+    try {
+      await api.put(`/depositions/${depId}`, { ...form, case_specific_details: caseSpecificDetails });
+      navigate(`/judge-desk/oral-evidence/deposition/type/${depId}`);
+    } catch (e) {
+      setMsg(e.response?.data?.detail || "Failed to save.");
+      setSaving(false);
+    }
+  };
+
+  if (!dep || !form) return <div className="app-shell"><TopBar title="Deposition" /><div className="page">Loading...</div></div>;
+
+  return (
+    <div className="app-shell">
+      <TopBar title="Deposition" />
+      <div className={`page dep-entry-lang-${form.language || "gu"}`}>
+        <h1>New Deposition</h1>
+        <p className="hint">Case No: <strong>{dep.primary_case_number}</strong> — Sr. No. {dep.sr_no}</p>
+        <div className="form-grid">
+          <label>Name of Witness</label>
+          <input value={form.witness_name} onChange={(e) => setForm({ ...form, witness_name: e.target.value })} />
+          <label>Father's / Husband's Name</label>
+          <input value={form.father_husband_name} onChange={(e) => setForm({ ...form, father_husband_name: e.target.value })} />
+          <label>Religion</label>
+          <input value={form.religion} onChange={(e) => setForm({ ...form, religion: e.target.value })} />
+          <label>Age</label>
+          <input value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
+          <label>Occupation</label>
+          <input value={form.occupation} onChange={(e) => setForm({ ...form, occupation: e.target.value })} />
+          <label>Address</label>
+          <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <label>Contact No. (optional)</label>
+          <input value={form.contact_no} onChange={(e) => setForm({ ...form, contact_no: e.target.value })} />
+          <label>Language of Deposition</label>
+          <select value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })}>
+            {LANG_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div style={{ marginTop: 16, padding: 14, border: "1px solid var(--border)", borderRadius: 6, background: "#fafafa" }}>
+          <p className="hint" style={{ marginTop: 0 }}>
+            {(dep.case_ids || []).length > 1
+              ? <>Enter this witness's <strong>Exhibit Number</strong> and <strong>Sr. No.</strong> for each linked case below.</>
+              : <>Enter this witness's <strong>Exhibit Number</strong> and <strong>Sr. No.</strong> for this case.</>}
+          </p>
+          {(dep.case_ids?.length ? dep.case_ids : [dep.primary_case_number]).map((num) => (
+            <div key={num} className="form-grid" style={{ marginBottom: 8 }}>
+              <label>{num} — Exhibit No.</label>
+              <input
+                value={num === dep.primary_case_number ? form.exhibit_number : (caseSpecificDetails[num]?.exhibit_number || "")}
+                onChange={(e) => {
+                  if (num === dep.primary_case_number) setForm({ ...form, exhibit_number: e.target.value });
+                  else setCaseSpecificDetails((prev) => ({ ...prev, [num]: { ...prev[num], exhibit_number: e.target.value } }));
+                }}
+              />
+              <label>{num} — Sr. No.</label>
+              <input
+                value={num === dep.primary_case_number ? form.sr_no : (caseSpecificDetails[num]?.sr_no || "")}
+                onChange={(e) => {
+                  if (num === dep.primary_case_number) setForm({ ...form, sr_no: e.target.value });
+                  else setCaseSpecificDetails((prev) => ({ ...prev, [num]: { ...prev[num], sr_no: e.target.value } }));
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="form-grid" style={{ marginTop: 12 }}>
+          <label>Stage of Deposition</label>
+          <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
+            {STAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <label>Producing Party</label>
+          <select value={form.producing_party} onChange={(e) => setForm({ ...form, producing_party: e.target.value })}>
+            {PARTY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <label>Defending Party</label>
+          <select value={form.defending_party} onChange={(e) => setForm({ ...form, defending_party: e.target.value })}>
+            {PARTY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <label>Advocate of Producing Party</label>
+          <input value={form.advocate_producing} onChange={(e) => setForm({ ...form, advocate_producing: e.target.value })} />
+          <label>Advocate of Defending Party</label>
+          <input value={form.advocate_defending} onChange={(e) => setForm({ ...form, advocate_defending: e.target.value })} />
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
+          <input type="checkbox" checked={form.av_conferencing} onChange={(e) => setForm({ ...form, av_conferencing: e.target.checked })} />
+          The deposition of the witness is recorded through audio-video conferencing
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+          <input type="checkbox" checked={form.vulnerable_witness} onChange={(e) => setForm({ ...form, vulnerable_witness: e.target.checked })} />
+          Vulnerable Witness
+        </label>
+        {msg && <p className="error">{msg}</p>}
+        <div className="form-actions">
+          <button className="btn btn-secondary" onClick={() => navigate(`/judge-desk/oral-evidence/deposition/type/${depId}`)}>Cancel</button>
+          <button className="btn btn-primary" disabled={saving} onClick={save}>Save &amp; Return to Typing</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const FONT_BY_LANG = {
+  gu: "'Lohit Gujarati'",
+  hi: "'Tiro Devanagari Hindi'",
+  en: "'Times New Roman'",
+};
+
+const DEP_DB_NAME = "acjm-deposition-editor-v1";
+const DEP_DOC_STORE = "documents";
+const DEP_VERSION_STORE = "versions";
+const DEP_ADJOURN_STORE = "adjournments";
+
+function openDepositionDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error("IndexedDB is not available in this browser."));
+      return;
+    }
+    const req = window.indexedDB.open(DEP_DB_NAME, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(DEP_DOC_STORE)) db.createObjectStore(DEP_DOC_STORE, { keyPath: "depId" });
+      if (!db.objectStoreNames.contains(DEP_VERSION_STORE)) {
+        const versions = db.createObjectStore(DEP_VERSION_STORE, { keyPath: "id" });
+        versions.createIndex("depId", "depId", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(DEP_ADJOURN_STORE)) {
+        const adjournments = db.createObjectStore(DEP_ADJOURN_STORE, { keyPath: "id" });
+        adjournments.createIndex("depId", "depId", { unique: false });
+        adjournments.createIndex("syncStatus", "syncStatus", { unique: false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGet(storeName, key) {
+  const db = await openDepositionDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const req = tx.objectStore(storeName).get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+async function idbPut(storeName, value) {
+  const db = await openDepositionDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).put(value);
+    tx.oncomplete = () => { db.close(); resolve(value); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+async function idbDelete(storeName, key) {
+  const db = await openDepositionDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).delete(key);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+async function idbGetAll(storeName) {
+  const db = await openDepositionDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const req = tx.objectStore(storeName).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+async function idbAddVersion(depId, version, html, metadata = {}) {
+  return idbPut(DEP_VERSION_STORE, {
+    id: `${depId}:${version}:${Date.now()}`,
+    depId,
+    version,
+    html,
+    metadata,
+    savedAt: Date.now(),
+  });
+}
+
+async function idbGetDocument(depId) {
+  try { return await idbGet(DEP_DOC_STORE, depId); }
+  catch (e) { return null; }
+}
+
+async function idbSaveDocument(doc) {
+  try { await idbPut(DEP_DOC_STORE, doc); }
+  catch (e) { /* local persistence failure is surfaced by server save status */ }
+}
+
+export function DepositionTypingPage() {
+  const { depId } = useParams();
+  const navigate = useNavigate();
+  const [dep, setDep] = useState(null);
+  const [fontSize, setFontSize] = useState(14);
+  const [zoom, setZoom] = useState(100);
+  const rulerSettings = useMemo(loadRulerSettings, []);
+  const [pageMargins, setPageMargins] = useState(rulerSettings.margins);
+  const [tabStops, setTabStops] = useState(rulerSettings.tabStops);
+  const [indentMarkers, setIndentMarkers] = useState({ left: 0, firstLine: 0 });
+  const [rulerGuide, setRulerGuide] = useState(null);
+  const [showRuler, setShowRuler] = useState(false);
+  const [highlightOn, setHighlightOn] = useState(() => localStorage.getItem("dep_highlight_on") !== "0");
+  const [activeFormats, setActiveFormats] = useState({ bold: false, italic: false, underline: false });
+  const [highlightColor, setHighlightColor] = useState(() => localStorage.getItem("dep_highlight_color") || "#baf7ba");
+  const [elapsed, setElapsed] = useState("00:00:00");
+  const [wordCount, setWordCount] = useState(0);
+  const [showAdjourn, setShowAdjourn] = useState(false);
+  const [adjournReason, setAdjournReason] = useState("");
+  const [adjournNextDate, setAdjournNextDate] = useState("");
+  const [adjournFor, setAdjournFor] = useState("further_chief");
+  const [workflowMsg, setWorkflowMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsHostile, setSettingsHostile] = useState("");
+  const [settingsStartCross, setSettingsStartCross] = useState("");
+  const [settingsMsg, setSettingsMsg] = useState("");
+  const [showProofread, setShowProofread] = useState(false);
+  const [proofreadSuggestions, setProofreadSuggestions] = useState([]);
+  const [editorHydrated, setEditorHydrated] = useState(false);
+  const [editorInitialized, setEditorInitialized] = useState(false);
+  const [initialContentLoading, setInitialContentLoading] = useState(true);
+  const [leavingForDetails, setLeavingForDetails] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("loading");
+  const [isNavigatingBack, setIsNavigatingBack] = useState(false);
+  const [historyAvailability, setHistoryAvailability] = useState({ canUndo: false, canRedo: false });
+  const [voiceEngine, setVoiceEngine] = useState("idle");
+  const [pdfPreview, setPdfPreview] = useState(null);
+
+  const editorRef = useRef(null);
+  const savedRangeRef = useRef(null);
+  const rulerDragRef = useRef(null);
+  const lastKeyDownWasTabRef = useRef(false);
+  const historyRef = useRef({
+    undoStack: [],
+    redoStack: [],
+    currentHtml: "",
+    isApplyingHistory: false,
+    typingBefore: null,
+    typingTimer: null,
+    isComposing: false,
+  });
+  // Tracks the largest body_html length seen so far. Used as a sanity check
+  // before every save: if the ref is non-null (passing the earlier v7 fix)
+  // but content has suddenly collapsed to near-empty compared to
+  // substantial content seen moments ago, that's far more likely to be a
+  // mid-unmount DOM read (React can clear a node's children during
+  // teardown while the ref itself briefly remains non-null) than a
+  // genuine, intentional clearing by the user — so the save is skipped
+  // rather than trusted.
+  const maxSeenLengthRef = useRef(0);
+  const isSuspiciouslyEmpty = (html) => {
+    const len = (html || "").length;
+    if (len > maxSeenLengthRef.current) { maxSeenLengthRef.current = len; return false; }
+    return maxSeenLengthRef.current > 50 && len < maxSeenLengthRef.current * 0.15;
+  };
+  const saveTimer = useRef(null);
+  const startRef = useRef(null);
+  const finalTimerResumeRef = useRef(null);
+  const serverMutationRef = useRef(false);
+  const editorHydratedRef = useRef(false);
+  const initializedDepositionRef = useRef(null);
+  const pendingInitialHtmlRef = useRef(null);
+  const editedDuringInitialLoadRef = useRef(false);
+  const localVersionRef = useRef(0);
+  const latestContentRef = useRef("");
+  const revisionRef = useRef(0);
+  const pendingServerHtmlRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  const authLostRef = useRef(false);
+  const authLostTokenRef = useRef("");
+  const draftKey = `dep_draft_${depId}`;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(RULER_SETTINGS_KEY, JSON.stringify({ margins: pageMargins, tabStops }));
+    } catch (e) { /* ruler preferences are non-critical */ }
+  }, [pageMargins, tabStops]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfPreview?.url) URL.revokeObjectURL(pdfPreview.url);
+    };
+  }, [pdfPreview?.url]);
+
+  const getCleanEditorHtml = () => {
+    const el = editorRef.current;
+    if (!el) return "";
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll(".dep-img-resize-handle").forEach((n) => n.remove());
+    clone.querySelectorAll(".dep-table-drop-marker").forEach((n) => n.remove());
+    clone.querySelectorAll(".live-sentence").forEach((n) => {
+      const parent = n.parentNode;
+      while (n.firstChild) parent.insertBefore(n.firstChild, n);
+      parent.removeChild(n);
+    });
+    return clone.innerHTML;
+  };
+  const updateWordCount = useCallback(() => {
+    const text = editorRef.current?.innerText || "";
+    setWordCount(countDepositionWords(text));
+  }, []);
+  const captureCurrentHtml = useCallback(() => {
+    const html = editorRef.current ? getCleanEditorHtml() : latestContentRef.current || "";
+    latestContentRef.current = html;
+    if (html.length > maxSeenLengthRef.current) maxSeenLengthRef.current = html.length;
+    updateWordCount();
+    return html;
+  }, [updateWordCount]);
+  const hasMeaningfulEditorContent = useCallback((html) => {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html || "";
+    const text = (wrapper.textContent || "").replace(/\u00a0/g, "").trim();
+    return !!text || !!wrapper.querySelector("img, table");
+  }, []);
+  const logHistory = (event, extra = {}) => {
+    if (process.env.NODE_ENV === "production") return;
+    const history = historyRef.current;
+    console.log(event, {
+      source: extra.source,
+      htmlLength: extra.htmlLength,
+      undoDepth: history.undoStack.length,
+      redoDepth: history.redoStack.length,
+      depositionId: depId,
+      timestamp: Date.now(),
+    });
+  };
+  const refreshHistoryAvailability = () => {
+    const history = historyRef.current;
+    setHistoryAvailability({
+      canUndo: history.undoStack.length > 0 || Boolean(history.typingBefore),
+      canRedo: history.redoStack.length > 0,
+    });
+  };
+  const trimHistoryStack = (stack) => {
+    while (stack.length > MAX_HISTORY_ENTRIES) stack.shift();
+  };
+  const nodePathFromEditor = (node) => {
+    const editor = editorRef.current;
+    if (!editor || !node || !editor.contains(node)) return null;
+    const path = [];
+    let current = node;
+    while (current && current !== editor) {
+      const parent = current.parentNode;
+      if (!parent) return null;
+      path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
+      current = parent;
+    }
+    return path;
+  };
+  const nodeFromPath = (path) => {
+    let node = editorRef.current;
+    if (!node || !Array.isArray(path)) return null;
+    for (const index of path) {
+      node = node?.childNodes?.[index];
+      if (!node) return null;
+    }
+    return node;
+  };
+  const captureEditorSelection = () => {
+    const editor = editorRef.current;
+    const sel = window.getSelection();
+    if (!editor || !sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) return null;
+    const range = sel.getRangeAt(0);
+    return {
+      startPath: nodePathFromEditor(range.startContainer),
+      startOffset: range.startOffset,
+      endPath: nodePathFromEditor(range.endContainer),
+      endOffset: range.endOffset,
+    };
+  };
+  const placeCaretAtEditorEnd = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+  const restoreEditorSelection = (selection) => {
+    const editor = editorRef.current;
+    if (!editor || !selection) { placeCaretAtEditorEnd(); return; }
+    try {
+      const startNode = nodeFromPath(selection.startPath);
+      const endNode = nodeFromPath(selection.endPath);
+      if (!startNode || !endNode) throw new Error("selection path missing");
+      const range = document.createRange();
+      range.setStart(startNode, Math.min(selection.startOffset || 0, startNode.length ?? startNode.childNodes.length));
+      range.setEnd(endNode, Math.min(selection.endOffset || 0, endNode.length ?? endNode.childNodes.length));
+      editor.focus();
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {
+      placeCaretAtEditorEnd();
+    }
+  };
+  const initializeHistory = (html, source = "initial-load") => {
+    const history = historyRef.current;
+    clearTimeout(history.typingTimer);
+    history.undoStack = [];
+    history.redoStack = [];
+    history.currentHtml = html || "";
+    history.typingBefore = null;
+    history.isApplyingHistory = false;
+    refreshHistoryAvailability();
+    logHistory("HISTORY_INITIALIZED", { source, htmlLength: (html || "").length });
+  };
+  const snapshotEntry = (html, source, selection = captureEditorSelection()) => ({
+    html: html || "",
+    selection,
+    timestamp: Date.now(),
+    source,
+    intentionalBlank: !hasMeaningfulEditorContent(html || ""),
+  });
+  const captureHistoryBefore = (source) => {
+    const history = historyRef.current;
+    if (history.isApplyingHistory || !editorRef.current) return;
+    const html = getCleanEditorHtml();
+    history.pendingBefore = snapshotEntry(html, source);
+  };
+  const discardPendingHistory = () => {
+    historyRef.current.pendingBefore = null;
+  };
+  const commitHistoryAfter = (source) => {
+    const history = historyRef.current;
+    if (history.isApplyingHistory || !history.pendingBefore) return;
+    const before = history.pendingBefore;
+    history.pendingBefore = null;
+    const afterHtml = getCleanEditorHtml();
+    if (afterHtml === before.html) return;
+    history.undoStack.push(before);
+    trimHistoryStack(history.undoStack);
+    history.currentHtml = afterHtml;
+    if (history.redoStack.length) logHistory("REDO_STACK_CLEARED", { source, htmlLength: afterHtml.length });
+    history.redoStack = [];
+    refreshHistoryAvailability();
+    logHistory("HISTORY_CAPTURED", { source, htmlLength: afterHtml.length });
+  };
+  const writeTypingDraft = useCallback((html, extra = {}) => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({
+        depId,
+        html,
+        savedAt: Date.now(),
+        ...extra,
+      }));
+    } catch (e) { /* local cache unavailable - server save still protects the record */ }
+  }, [depId, draftKey]);
+
+  const buildDocMetadata = useCallback((data = dep) => ({
+    depId,
+    caseNumber: data?.primary_case_number || "",
+    witnessName: data?.witness_name || "",
+    language: data?.language || "gu",
+    status: data?.status || "in_progress",
+    scrollTop: window.scrollY || 0,
+  }), [dep, depId]);
+
+  const readLocalStorageDraft = useCallback(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`dep_draft_${depId}`) || "null");
+    } catch (e) {
+      return null;
+    }
+  }, [depId]);
+
+  const bestLocalRecoveryHtml = useCallback((localDoc, localDraft) => {
+    const indexedHtml = localDoc?.html || "";
+    const draftHtml = localDraft?.html || "";
+    if (!hasMeaningfulEditorContent(indexedHtml)) return draftHtml;
+    if (!hasMeaningfulEditorContent(draftHtml)) return indexedHtml;
+    const draftSavedAt = Number(localDraft?.savedAt || 0);
+    const indexedSavedAt = Number(localDoc?.updatedAt || 0);
+    return draftSavedAt > indexedSavedAt ? draftHtml : indexedHtml;
+  }, [hasMeaningfulEditorContent]);
+
+  const applyEditorHtml = useCallback((html) => {
+    pendingInitialHtmlRef.current = html || "";
+    latestContentRef.current = pendingInitialHtmlRef.current;
+    if (!editorRef.current) return;
+    historyRef.current.isApplyingHistory = true;
+    editorRef.current.innerHTML = pendingInitialHtmlRef.current;
+    maxSeenLengthRef.current = editorRef.current.innerHTML.length;
+    updateWordCount();
+    initializeHistory(pendingInitialHtmlRef.current, "initial-restore");
+    pendingInitialHtmlRef.current = null;
+    historyRef.current.isApplyingHistory = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setEditorNode = useCallback((node) => {
+    editorRef.current = node;
+    setEditorInitialized(!!node);
+    if (process.env.NODE_ENV !== "production") console.log("EDITOR STATE", {
+      editorExists: Boolean(node),
+      editorInitialized: Boolean(node),
+      initialContentLoading,
+      isSaving: saving,
+      isNavigatingBack,
+      depositionId: depId,
+    });
+    if (node && pendingInitialHtmlRef.current != null) {
+      if (process.env.NODE_ENV !== "production") console.trace("SET_CONTENT_CALLED", { depositionId: depId, contentLength: pendingInitialHtmlRef.current.length, reason: "editor-node-mounted" });
+      historyRef.current.isApplyingHistory = true;
+      node.innerHTML = pendingInitialHtmlRef.current;
+      maxSeenLengthRef.current = node.innerHTML.length;
+      latestContentRef.current = node.innerHTML;
+      updateWordCount();
+      initializeHistory(node.innerHTML, "editor-node-mounted");
+      pendingInitialHtmlRef.current = null;
+      historyRef.current.isApplyingHistory = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depId, initialContentLoading, isNavigatingBack, saving, updateWordCount]);
+
+  const persistLocalDocument = useCallback(async (html, extra = {}) => {
+    const version = (extra.version || localVersionRef.current + 1);
+    localVersionRef.current = Math.max(localVersionRef.current, version);
+    revisionRef.current = Math.max(revisionRef.current, version);
+    latestContentRef.current = html || "";
+    const now = Date.now();
+    const doc = {
+      depId,
+      html,
+      json: { type: "html", html },
+      version,
+      updatedAt: now,
+      pendingSync: !!extra.pendingSync,
+      serverSyncedAt: extra.serverSyncedAt || null,
+      metadata: buildDocMetadata(),
+    };
+    writeTypingDraft(html, { savedAt: now, version, pendingServerSync: !!extra.pendingSync, serverSyncedAt: extra.serverSyncedAt });
+    await idbSaveDocument(doc);
+    await idbAddVersion(depId, version, html, doc.metadata);
+    return doc;
+  }, [buildDocMetadata, depId, writeTypingDraft]);
+
+  const persistLocalDocumentStrict = useCallback(async (html, extra = {}) => {
+    const version = (extra.version || localVersionRef.current + 1);
+    localVersionRef.current = Math.max(localVersionRef.current, version);
+    revisionRef.current = Math.max(revisionRef.current, version);
+    latestContentRef.current = html || "";
+    const now = Date.now();
+    const doc = {
+      depId,
+      html,
+      json: { type: "html", html },
+      version,
+      updatedAt: now,
+      pendingSync: !!extra.pendingSync,
+      serverSyncedAt: extra.serverSyncedAt || null,
+      metadata: buildDocMetadata(),
+    };
+    writeTypingDraft(html, { savedAt: now, version, pendingServerSync: !!extra.pendingSync, serverSyncedAt: extra.serverSyncedAt });
+    await idbPut(DEP_DOC_STORE, doc);
+    await idbAddVersion(depId, version, html, doc.metadata);
+    return doc;
+  }, [buildDocMetadata, depId, writeTypingDraft]);
+
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearInterval(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const currentAuthToken = useCallback(() => localStorage.getItem("token") || "", []);
+  const markAuthLost = useCallback((message) => {
+    authLostRef.current = true;
+    authLostTokenRef.current = currentAuthToken();
+    clearReconnectTimer();
+    setSyncStatus("auth-lost");
+    setWorkflowMsg(message);
+  }, [clearReconnectTimer, currentAuthToken]);
+
+  const shouldPauseServerSyncForAuth = useCallback(() => (
+    authLostRef.current && currentAuthToken() === authLostTokenRef.current
+  ), [currentAuthToken]);
+
+  const queueAdjournmentLocally = useCallback(async ({ reason, nextDateTime, adjournedFor, editorRevision }) => {
+    const record = {
+      id: `${depId}:${Date.now()}`,
+      depositionId: depId,
+      caseId: dep?.primary_case_number || "",
+      witnessId: dep?.witness_name || "",
+      reason,
+      nextDate: nextDateTime,
+      nextTime: nextDateTime,
+      adjournedFor,
+      editorRevision,
+      createdAt: Date.now(),
+      syncStatus: "PENDING",
+    };
+    await idbPut(DEP_ADJOURN_STORE, record);
+    return record;
+  }, [dep, depId]);
+
+  const syncPendingAdjournments = useCallback(async () => {
+    const queued = await idbGetAll(DEP_ADJOURN_STORE);
+    const pending = queued
+      .filter((item) => item.depositionId === depId && item.syncStatus === "PENDING")
+      .sort((a, b) => (a.editorRevision || 0) - (b.editorRevision || 0) || (a.createdAt || 0) - (b.createdAt || 0));
+    for (const item of pending) {
+      await api.post(`/depositions/${depId}/adjourn`, {
+        reason: item.reason,
+        next_date_time: item.nextDate,
+        adjourn_for: item.adjournedFor,
+      });
+      await idbDelete(DEP_ADJOURN_STORE, item.id);
+    }
+  }, [depId]);
+
+  const syncDocumentToBackend = useCallback(async (html, options = {}) => {
+    const { throwOnError = false } = options;
+    if (shouldPauseServerSyncForAuth()) {
+      await persistLocalDocument(html, { pendingSync: true });
+      setSyncStatus("auth-lost");
+      if (throwOnError) throw new Error("Login session needs renewal before server sync.");
+      return false;
+    }
+    if (authLostRef.current) {
+      authLostRef.current = false;
+      authLostTokenRef.current = "";
+    }
+    try {
+      setSyncStatus("saving");
+      await api.put(`/depositions/${depId}`, { body_html: html, client_revision: localVersionRef.current || 0 });
+      pendingServerHtmlRef.current = null;
+      clearReconnectTimer();
+      authLostRef.current = false;
+      authLostTokenRef.current = "";
+      await persistLocalDocument(html, { serverSyncedAt: Date.now(), version: localVersionRef.current || 1 });
+      setSyncStatus("saved");
+      return true;
+    } catch (e) {
+      pendingServerHtmlRef.current = html;
+      await persistLocalDocument(html, { pendingSync: true });
+      if (e?.response?.status === 401) {
+        markAuthLost("Login session needs renewal. The deposition text is saved locally; server sync is paused until login.");
+        if (throwOnError) throw e;
+        return false;
+      }
+      setSyncStatus("offline");
+      if (!reconnectTimerRef.current) {
+        reconnectTimerRef.current = setInterval(() => {
+          const pending = pendingServerHtmlRef.current || (editorRef.current ? getCleanEditorHtml() : "");
+          if (pending) syncDocumentToBackend(pending);
+        }, 5000);
+      }
+      if (throwOnError) throw e;
+      return false;
+    }
+  }, [clearReconnectTimer, depId, markAuthLost, persistLocalDocument, shouldPauseServerSyncForAuth]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") console.log("EDITOR STATE", {
+      editorExists: Boolean(editorRef.current),
+      editorInitialized,
+      initialContentLoading,
+      isSaving: saving,
+      isNavigatingBack,
+      depositionId: depId,
+    });
+  }, [depId, editorInitialized, initialContentLoading, isNavigatingBack, saving]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      if (shouldPauseServerSyncForAuth()) return;
+      const pending = pendingServerHtmlRef.current || (editorRef.current ? getCleanEditorHtml() : "");
+      if (pending) syncDocumentToBackend(pending);
+      syncPendingAdjournments().catch((e) => console.error("Pending adjournment sync failed", e));
+    };
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      clearReconnectTimer();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncDocumentToBackend, syncPendingAdjournments]);
+
+  useEffect(() => {
+    const onVoiceEngine = (event) => {
+      const engine = event?.detail?.engine;
+      if (["ai", "browser", "idle", "unavailable"].includes(engine)) {
+        setVoiceEngine(engine);
+      }
+    };
+    window.addEventListener("acjm-voice-engine", onVoiceEngine);
+    return () => window.removeEventListener("acjm-voice-engine", onVoiceEngine);
+  }, []);
+
+  useEffect(() => {
+    if (!workflowMsg) return undefined;
+    const messageAtStart = workflowMsg;
+    const timer = setTimeout(() => {
+      setWorkflowMsg((current) => (current === messageAtStart ? "" : current));
+    }, 7000);
+    return () => clearTimeout(timer);
+  }, [workflowMsg]);
+
+  useEffect(() => {
+    // Chrome shows its own native resize/edit handles for images and tables
+    // inside a contentEditable region by default. Those were competing with
+    // (and blocking) our own custom toolbar and resize handles — disabling
+    // them here is what actually makes our own controls reliably appear.
+    try {
+      document.execCommand("enableObjectResizing", false, false);
+      document.execCommand("enableInlineTableEditing", false, false);
+    } catch (e) { /* not supported in this browser — harmless if so */ }
+  }, []);
+
+  useEffect(() => {
+    if (initializedDepositionRef.current === depId) return undefined;
+    initializedDepositionRef.current = depId;
+    if (process.env.NODE_ENV !== "production") console.debug("DEPOSITION_ID_CHANGED", { depId });
+    setEditorHydrated(false);
+    setInitialContentLoading(true);
+    if (process.env.NODE_ENV !== "production") console.log("EDITOR_LOADING_SET", { depositionId: depId, initialContentLoading: true, reason: "initial-load-start" });
+    editorHydratedRef.current = false;
+    editedDuringInitialLoadRef.current = false;
+    clearTimeout(saveTimer.current);
+    let cancelled = false;
+    const load = async () => {
+      setSyncStatus("loading");
+      const localDoc = await idbGetDocument(depId);
+      const localDraft = readLocalStorageDraft();
+      const localRecoveryHtml = bestLocalRecoveryHtml(localDoc, localDraft);
+      if (cancelled) return;
+      if (localDoc || hasMeaningfulEditorContent(localRecoveryHtml)) {
+        localVersionRef.current = Number(localDoc?.version || localDraft?.version || 0);
+        setDep((current) => current || {
+          id: depId,
+          witness_name: localDoc?.metadata?.witnessName || "Deposition",
+          primary_case_number: localDoc?.metadata?.caseNumber || "",
+          language: localDoc?.metadata?.language || "gu",
+          status: localDoc?.metadata?.status || "in_progress",
+        });
+        applyEditorHtml(localRecoveryHtml || "");
+        if (process.env.NODE_ENV !== "production") console.debug("INITIAL_CONTENT_LOAD", { depId, source: "local-recovery", contentLength: (localRecoveryHtml || "").length });
+        if (localDoc?.pendingSync || localDraft?.pendingServerSync) pendingServerHtmlRef.current = localRecoveryHtml || "";
+        setSyncStatus((localDoc?.pendingSync || localDraft?.pendingServerSync) ? "offline" : "saved");
+      }
+
+      try {
+        const { data } = await api.get(`/depositions/${depId}`);
+        if (cancelled) return;
+        setDep(data);
+        const lang = data.language || "gu";
+        localStorage.setItem("acjm_mic_lang", lang);
+        startRef.current = data.start_time_iso ? new Date(data.start_time_iso) : new Date();
+
+        const serverHtml = data.body_html || "";
+        const serverVersion = Number(data.version || 0);
+        const serverUpdatedAt = Date.parse(data.updated_at || data.created_at || "") || 0;
+        const localUpdatedAt = Math.max(Number(localDoc?.updatedAt || 0), Number(localDraft?.savedAt || 0));
+        const localVersion = Math.max(Number(localDoc?.version || 0), Number(localDraft?.version || 0));
+        const localIsNewer = hasMeaningfulEditorContent(localRecoveryHtml) &&
+          (localDoc?.pendingSync || localDraft?.pendingServerSync || localUpdatedAt > serverUpdatedAt || localVersion > serverVersion);
+        const liveHtml = editedDuringInitialLoadRef.current && editorRef.current ? getCleanEditorHtml() : "";
+        const htmlToLoad = editedDuringInitialLoadRef.current && hasMeaningfulEditorContent(liveHtml)
+          ? liveHtml
+          : (localIsNewer || !hasMeaningfulEditorContent(serverHtml) ? (localRecoveryHtml || "") : serverHtml);
+
+        applyEditorHtml(htmlToLoad);
+        if (process.env.NODE_ENV !== "production") console.debug("INITIAL_CONTENT_LOAD", { depId, source: localIsNewer ? "indexeddb-newer" : "backend", contentLength: htmlToLoad.length });
+        const version = Math.max(Number(localDoc?.version || 0), serverVersion, 1);
+        await persistLocalDocument(htmlToLoad, { version, serverSyncedAt: (localIsNewer || editedDuringInitialLoadRef.current) ? null : Date.now(), pendingSync: !!(localIsNewer || editedDuringInitialLoadRef.current) });
+        if (localIsNewer || editedDuringInitialLoadRef.current) {
+          pendingServerHtmlRef.current = htmlToLoad;
+          syncDocumentToBackend(htmlToLoad);
+        } else {
+          setSyncStatus("saved");
+        }
+      } catch (e) {
+        if (hasMeaningfulEditorContent(localRecoveryHtml)) {
+          applyEditorHtml(localRecoveryHtml);
+        }
+        if (e?.response?.status === 401) {
+          markAuthLost("Login session needs renewal. The deposition text is restored from this browser and remains saved locally.");
+          return;
+        }
+        setSyncStatus("offline");
+        const pending = localRecoveryHtml || pendingServerHtmlRef.current;
+        if (pending) syncDocumentToBackend(pending);
+      } finally {
+        if (!cancelled) {
+          editorHydratedRef.current = true;
+          setEditorHydrated(true);
+          setInitialContentLoading(false);
+          if (process.env.NODE_ENV !== "production") console.log("EDITOR_LOADING_SET", { depositionId: depId, initialContentLoading: false, reason: "initial-load-finished" });
+        }
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+      editorHydratedRef.current = false;
+      setInitialContentLoading(false);
+      clearTimeout(saveTimer.current);
+    };
+  }, [applyEditorHtml, bestLocalRecoveryHtml, depId, hasMeaningfulEditorContent, markAuthLost, persistLocalDocument, readLocalStorageDraft, syncDocumentToBackend]);
+
+  useEffect(() => {
+    const updateElapsed = () => {
+      const start = parseDepositionDateTime(dep?.start_time_iso) ||
+        parseDepositionDateTime(dep?.start_time_display) ||
+        startRef.current;
+      if (start && !startRef.current) startRef.current = start;
+      const isFinal = dep?.status === "completed" || dep?.status === "adjourned";
+      if (isFinal) {
+        const completedAt = parseDepositionDateTime(dep?.complete_time_display) ||
+          parseDepositionDateTime(dep?.updated_at) ||
+          new Date();
+        const resumeKey = `${depId}:${dep?.status}:${dep?.complete_time_display || ""}:${dep?.updated_at || ""}`;
+        if (!finalTimerResumeRef.current || finalTimerResumeRef.current.key !== resumeKey) {
+          finalTimerResumeRef.current = {
+            key: resumeKey,
+            baseMs: Math.max(0, completedAt.getTime() - (start || completedAt).getTime()),
+            resumedAt: Date.now(),
+          };
+        }
+        const resumed = finalTimerResumeRef.current;
+        setElapsed(formatElapsedTime(new Date(0), new Date(resumed.baseMs + (Date.now() - resumed.resumedAt))));
+        return;
+      }
+      finalTimerResumeRef.current = null;
+      setElapsed(formatElapsedTime(start || startRef.current, new Date()));
+    };
+    updateElapsed();
+    const t = setInterval(updateElapsed, 1000);
+    return () => clearInterval(t);
+  }, [depId, dep?.start_time_iso, dep?.start_time_display, dep?.complete_time_display, dep?.updated_at, dep?.status]);
+
+  const scheduleSave = () => {
+    if (editorRef.current) {
+      const html = captureCurrentHtml();
+      persistLocalDocument(html, { pendingSync: true });
+    }
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      // Guard against sending an empty/destructive save if the editor ref
+      // is momentarily unavailable (e.g. mid-unmount while navigating away)
+      // — this was the actual cause of deposition text being wiped out when
+      // clicking Back: a save fired with a null ref, which silently sent
+      // body_html:"" and permanently overwrote the real content.
+      if (!editorRef.current) return;
+      const html = captureCurrentHtml();
+      setSaving(true);
+      try {
+        await persistLocalDocument(html, { pendingSync: true });
+        if (editorHydratedRef.current) await syncDocumentToBackend(html);
+      }
+      finally { setSaving(false); }
+    }, 1200);
+  };
+
+  const applyHistoryHtml = (entry, action) => {
+    const editor = editorRef.current;
+    const history = historyRef.current;
+    if (!editor || !entry) return false;
+    const currentHtml = getCleanEditorHtml();
+    if (
+      hasMeaningfulEditorContent(currentHtml) &&
+      !hasMeaningfulEditorContent(entry.html) &&
+      !entry.intentionalBlank
+    ) {
+      console.error("HISTORY_BLANK_SNAPSHOT_REJECTED", {
+        source: entry.source,
+        undoDepth: history.undoStack.length,
+        redoDepth: history.redoStack.length,
+      });
+      return false;
+    }
+    logHistory(action === "undo" ? "UNDO_APPLY_STARTED" : "HISTORY_APPLY_STARTED", { source: `${action}:${entry.source}`, htmlLength: (entry.html || "").length });
+    logHistory("HISTORY_TARGET_RESOLVED", { source: `${action}:${entry.source}`, htmlLength: (entry.html || "").length });
+    history.isApplyingHistory = true;
+    suppressHighlightRef.current = true;
+    editor.innerHTML = entry.html || "";
+    latestContentRef.current = entry.html || "";
+    history.currentHtml = entry.html || "";
+    maxSeenLengthRef.current = Math.max(maxSeenLengthRef.current, editor.innerHTML.length);
+    requestAnimationFrame(() => {
+      restoreEditorSelection(entry.selection);
+      suppressHighlightRef.current = false;
+      history.isApplyingHistory = false;
+      captureCurrentHtml();
+      persistLocalDocument(entry.html || "", { pendingSync: true });
+      scheduleSave();
+      updateActiveFormats();
+      logHistory(action === "undo" ? "UNDO_APPLY_FINISHED" : "HISTORY_APPLY_COMPLETED", { source: `${action}:${entry.source}`, htmlLength: (entry.html || "").length });
+    });
+    return true;
+  };
+
+  const handleUndo = () => {
+    const history = historyRef.current;
+    logHistory("UNDO_REQUESTED", { source: "toolbar-or-keyboard", htmlLength: (history.currentHtml || "").length });
+    flushPendingHistoryBatch("typing-before-undo");
+    logHistory("UNDO_STACK_DEPTH", { source: "after-flush", htmlLength: getCleanEditorHtml().length });
+    if (!editorRef.current || history.undoStack.length === 0) { refreshHistoryAvailability(); return; }
+    const currentEntry = snapshotEntry(getCleanEditorHtml(), "redo-origin");
+    const previousEntry = history.undoStack.pop();
+    history.redoStack.push(currentEntry);
+    trimHistoryStack(history.redoStack);
+    if (applyHistoryHtml(previousEntry, "undo")) {
+      refreshHistoryAvailability();
+      logHistory("UNDO_APPLIED", { source: previousEntry.source, htmlLength: (previousEntry.html || "").length });
+    } else {
+      history.undoStack.push(previousEntry);
+      history.redoStack.pop();
+      refreshHistoryAvailability();
+    }
+  };
+
+  const handleRedo = () => {
+    const history = historyRef.current;
+    logHistory("REDO_REQUESTED", { source: "toolbar-or-keyboard", htmlLength: (history.currentHtml || "").length });
+    flushPendingHistoryBatch("typing-before-redo");
+    if (!editorRef.current || history.redoStack.length === 0) { refreshHistoryAvailability(); return; }
+    const currentEntry = snapshotEntry(getCleanEditorHtml(), "undo-origin");
+    const nextEntry = history.redoStack.pop();
+    history.undoStack.push(currentEntry);
+    trimHistoryStack(history.undoStack);
+    if (applyHistoryHtml(nextEntry, "redo")) {
+      refreshHistoryAvailability();
+      logHistory("REDO_APPLIED", { source: nextEntry.source, htmlLength: (nextEntry.html || "").length });
+    } else {
+      history.redoStack.push(nextEntry);
+      history.undoStack.pop();
+      refreshHistoryAvailability();
+    }
+  };
+
+  const saveNow = async () => {
+    clearTimeout(saveTimer.current);
+    if (!editorRef.current && !latestContentRef.current) {
+      throw new Error("Editor is still loading. Please try again.");
+    }
+    const html = captureCurrentHtml();
+    if (isSuspiciouslyEmpty(html)) {
+      throw new Error("The typed text appears to be missing in the editor. Please do not leave this page until it is visible.");
+    }
+    await persistLocalDocument(html, { pendingSync: true });
+    setSaving(true);
+    try {
+      await syncDocumentToBackend(html, { throwOnError: true });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveAndOpenWitnessDetails = async () => {
+    if (leavingForDetails || isNavigatingBack) return;
+    setLeavingForDetails(true);
+    setIsNavigatingBack(true);
+    try {
+      clearTimeout(saveTimer.current);
+      const html = captureCurrentHtml();
+      try {
+        await persistLocalDocument(html, { pendingSync: true });
+      } catch (localSaveError) {
+        console.error("IndexedDB/local version save failed; latest deposition HTML remains in memory/localStorage path", localSaveError);
+      }
+      try {
+        await syncDocumentToBackend(html);
+      } catch (saveError) {
+        console.error("Backend save failed; local deposition remains preserved", saveError);
+      }
+      navigate(`/judge-desk/oral-evidence/deposition/edit/${depId}`);
+    } catch (e) {
+      console.error("Could not preserve deposition before opening witness details", e);
+      navigate(`/judge-desk/oral-evidence/deposition/edit/${depId}`);
+    }
+  };
+
+  // Safety-net save: the debounced save above only fires ~1.2s after the
+  // user STOPS typing, so continuous, uninterrupted typing (e.g. dictating
+  // a long passage via voice) could go a long time without ever actually
+  // reaching the server — a real data-loss risk in a power cut. This runs
+  // independently every second regardless of typing pauses.
+  useAutosave(
+    () => {
+      if (serverMutationRef.current) return Promise.resolve();
+      if (!editorHydratedRef.current) return Promise.resolve();
+      if (!editorRef.current) return Promise.resolve(); // see guard note above
+      const html = captureCurrentHtml();
+      return persistLocalDocument(html, { pendingSync: true }).then(() => syncDocumentToBackend(html));
+    },
+    [depId, editorHydrated, persistLocalDocument, syncDocumentToBackend, captureCurrentHtml],
+    { intervalMs: 1000, enabled: !!depId && editorHydrated }
+  );
+
+  // Finds the block-level element (a direct child of the editor, e.g. the
+  // <p> or <div> Chrome creates for each new line after Enter) that
+  // currently contains the cursor. Scoping highlight logic to just this
+  // block — rather than the whole editor's flattened text — is what avoids
+  // the character-offset mismatches that were breaking highlighting the
+  // moment a new paragraph was started.
+  // Walks backward through the ACTUAL DOM text nodes (never innerText,
+  // which was the source of the bug) starting just before the cursor,
+  // looking for the nearest preceding '.', '?', or '!'. Returns the DOM
+  // position right after that punctuation, or the very start of `root` if
+  // none is found before reaching it.
+  const findSentenceStart = (startNode, startOffset, root) => {
+    let node = startNode;
+    let offset = startOffset;
+    while (node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent;
+        for (let i = offset - 1; i >= 0; i--) {
+          if (text[i] === "." || text[i] === "?" || text[i] === "!") {
+            return { node, offset: i + 1 };
+          }
+        }
+      }
+      // Move to the previous node in document order within root.
+      let prev = node.previousSibling;
+      while (!prev && node.parentNode && node.parentNode !== root) {
+        node = node.parentNode;
+        prev = node.previousSibling;
+      }
+      if (!prev) return { node: root, offset: 0, atRootStart: true };
+      node = prev;
+      while (node.lastChild) node = node.lastChild;
+      offset = node.nodeType === Node.TEXT_NODE ? node.textContent.length : 0;
+    }
+    return { node: root, offset: 0, atRootStart: true };
+  };
+
+  const applyLiveHighlight = () => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+
+    window.CSS?.highlights?.delete("dep-live-sentence");
+    el.querySelectorAll(".live-sentence").forEach((n) => {
+      const parent = n.parentNode;
+      while (n.firstChild) parent.insertBefore(n.firstChild, n);
+      parent.removeChild(n);
+    });
+    if (!highlightOn) return;
+    if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) return;
+    const cursorNode = range.startContainer;
+    const cursorOffset = range.startOffset;
+    if (cursorNode.nodeType !== Node.TEXT_NODE) return;
+
+    const start = findSentenceStart(cursorNode, cursorOffset, el);
+    try {
+      const wrapRange = document.createRange();
+      if (start.atRootStart) wrapRange.setStart(el, 0);
+      else wrapRange.setStart(start.node, start.offset);
+      wrapRange.setEnd(cursorNode, cursorOffset);
+      const currentText = wrapRange.toString().trim();
+      if (wrapRange.collapsed || !currentText || /[.!?]\s*$/.test(currentText)) return;
+      if (window.Highlight && window.CSS?.highlights) {
+        window.CSS.highlights.set("dep-live-sentence", new window.Highlight(wrapRange));
+      }
+    } catch (e) { /* best effort only */ }
+  };
+  const clearLiveHighlight = useCallback(() => {
+    window.CSS?.highlights?.delete("dep-live-sentence");
+    editorRef.current?.querySelectorAll(".live-sentence").forEach((n) => {
+      const parent = n.parentNode;
+      while (n.firstChild) parent.insertBefore(n.firstChild, n);
+      parent.removeChild(n);
+    });
+  }, []);
+  // Immediately clear any highlight the moment the checkbox is unticked,
+  // rather than waiting for the next keystroke to notice.
+  useEffect(() => {
+    if (!highlightOn) {
+      clearLiveHighlight();
+    }
+  }, [clearLiveHighlight, highlightOn]);
+
+  // Move the caret to the very end of the editor's content, and keep it
+  // there. Used after voice-typing insertions and after Hostile/Start Cross
+  // paragraph insertions, so the next thing spoken/typed lands after what
+  // was just added, not wherever the caret happened to end up.
+  const moveCaretToEnd = () => {
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+
+  // Called on genuine user input (typing, voice-typing) — applies the live
+  // sentence highlight and schedules a save.
+  const suppressHighlightRef = useRef(false);
+  const beginTypingHistory = (source = "typing") => {
+    const history = historyRef.current;
+    if (history.isApplyingHistory || history.typingBefore || !editorRef.current) return;
+    history.typingBefore = snapshotEntry(history.currentHtml || getCleanEditorHtml(), source);
+    refreshHistoryAvailability();
+    logHistory("TYPING_BATCH_STARTED", { source, htmlLength: (history.typingBefore.html || "").length });
+    logHistory("HISTORY_TYPING_BATCH_STARTED", { source, htmlLength: (history.typingBefore.html || "").length });
+  };
+  const commitTypingHistory = (source = "typing") => {
+    const history = historyRef.current;
+    if (history.isApplyingHistory || !history.typingBefore || !editorRef.current) return;
+    const before = history.typingBefore;
+    history.typingBefore = null;
+    const afterHtml = getCleanEditorHtml();
+    if (afterHtml === before.html) { refreshHistoryAvailability(); return; }
+    history.undoStack.push(before);
+    trimHistoryStack(history.undoStack);
+    history.currentHtml = afterHtml;
+    if (history.redoStack.length) logHistory("REDO_STACK_CLEARED", { source, htmlLength: afterHtml.length });
+    history.redoStack = [];
+    refreshHistoryAvailability();
+    logHistory("TYPING_BATCH_COMMITTED", { source, htmlLength: afterHtml.length });
+    logHistory("HISTORY_TYPING_BATCH_COMMITTED", { source, htmlLength: afterHtml.length });
+  };
+  const flushPendingHistoryBatch = (source = "flush") => {
+    const history = historyRef.current;
+    clearTimeout(history.typingTimer);
+    commitTypingHistory(source);
+    refreshHistoryAvailability();
+  };
+  const scheduleTypingHistoryCommit = (source = "typing") => {
+    const history = historyRef.current;
+    if (history.isComposing) return;
+    clearTimeout(history.typingTimer);
+    history.typingTimer = setTimeout(() => commitTypingHistory(source), 800);
+  };
+  const onEditorBeforeInput = (e) => {
+    if (historyRef.current.isApplyingHistory) return;
+    if (lastKeyDownWasTabRef.current && (e.inputType === "insertParagraph" || e.inputType === "insertLineBreak")) {
+      // A Tab keydown is always fully handled (and prevented) above — if a
+      // paragraph/line-break insertion still reaches here immediately
+      // after one, it did not come from a genuine Enter press, so it is
+      // blocked rather than letting the cursor jump to a new line.
+      e.preventDefault();
+      return;
+    }
+    logHistory("BEFORE_INPUT_RECEIVED", { source: e.inputType || "typing", htmlLength: (historyRef.current.currentHtml || "").length });
+    if (e.inputType === "historyUndo") { e.preventDefault(); handleUndo(); return; }
+    if (e.inputType === "historyRedo") { e.preventDefault(); handleRedo(); return; }
+    lastKeyDownWasTabRef.current = false;
+    beginTypingHistory(e.inputType || "typing");
+  };
+  const onEditorInput = () => {
+    if (suppressHighlightRef.current) { scheduleSave(); return; }
+    if (!editorHydratedRef.current) editedDuringInitialLoadRef.current = true;
+    beginTypingHistory("typing");
+    logHistory("INPUT_RECEIVED", { source: "typing", htmlLength: getCleanEditorHtml().length });
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode) && sel.anchorNode.nodeType === Node.TEXT_NODE) {
+      const range = sel.getRangeAt(0);
+      if (range.collapsed && range.startContainer === sel.anchorNode) {
+        const result = applyLiveGrammarCorrectionsInTextNode(range.startContainer, range.startOffset);
+        if (result.changed) {
+          const nextRange = document.createRange();
+          nextRange.setStart(range.startContainer, result.offset);
+          nextRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(nextRange);
+        }
+      } else {
+        const selection = captureEditorSelection();
+        if (normalizeSpokenPunctuationInElement(editorRef.current)) restoreEditorSelection(selection);
+      }
+    } else {
+      const selection = captureEditorSelection();
+      if (normalizeSpokenPunctuationInElement(editorRef.current)) restoreEditorSelection(selection);
+    }
+    applyLiveHighlight();
+    scheduleTypingHistoryCommit("typing");
+    scheduleSave();
+  };
+  const onEditorCompositionStart = () => {
+    historyRef.current.isComposing = true;
+    beginTypingHistory("composition");
+  };
+  const onEditorCompositionEnd = () => {
+    historyRef.current.isComposing = false;
+    scheduleTypingHistoryCommit("composition");
+  };
+
+  const isBlankListItem = (li) => {
+    if (!li) return false;
+    const clone = li.cloneNode(true);
+    clone.querySelectorAll(".live-sentence, .dep-img-resize-handle").forEach((n) => n.remove());
+    return clone.textContent.replace(/\u00a0/g, "").trim() === "" && clone.querySelectorAll("img, table").length === 0;
+  };
+  const moveCaretInto = (node, atEnd = false) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(!atEnd);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+  const exitListAt = (li) => {
+    const list = li?.closest("ol,ul");
+    if (!li || !list) return;
+    commitTypingHistory("before-list-exit");
+    captureHistoryBefore("list-exit");
+    const p = document.createElement("p");
+    p.style.textAlign = getCurrentEditorAlignment();
+    p.innerHTML = "<br>";
+    const followingItems = [];
+    let next = li.nextElementSibling;
+    while (next) {
+      const current = next;
+      next = next.nextElementSibling;
+      followingItems.push(current);
+    }
+    li.remove();
+    if (followingItems.length > 0) {
+      const newList = document.createElement(list.tagName.toLowerCase());
+      followingItems.forEach((item) => newList.appendChild(item));
+      list.after(newList);
+      list.after(p);
+    } else {
+      list.after(p);
+    }
+    if (list.children.length === 0) list.remove();
+    moveCaretInto(p);
+    commitHistoryAfter("list-exit");
+    scheduleSave();
+  };
+  const onEditorKeyDown = (e) => {
+    if (e.key === "Tab" || e.code === "Tab" || e.keyCode === 9) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.nativeEvent?.stopImmediatePropagation) e.nativeEvent.stopImmediatePropagation();
+      lastKeyDownWasTabRef.current = true;
+      insertTabAtCaret();
+      return;
+    }
+    lastKeyDownWasTabRef.current = false;
+    if (handleAlignmentShortcut(e)) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      e.stopPropagation();
+      logHistory("KEYBOARD_HISTORY_SHORTCUT", { source: e.shiftKey ? "redo" : "undo", htmlLength: getCleanEditorHtml().length });
+      if (e.shiftKey) handleRedo();
+      else handleUndo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      e.stopPropagation();
+      logHistory("KEYBOARD_HISTORY_SHORTCUT", { source: "redo", htmlLength: getCleanEditorHtml().length });
+      handleRedo();
+      return;
+    }
+    if (e.key !== "Enter" && e.key !== "Backspace") return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorRef.current?.contains(sel.anchorNode)) return;
+    let node = sel.anchorNode;
+    while (node && node !== editorRef.current && node.nodeName !== "LI") node = node.parentNode;
+    if (!node || node === editorRef.current || !isBlankListItem(node)) return;
+    e.preventDefault();
+    exitListAt(node);
+  };
+
+  useEffect(() => {
+    const onHistoryShortcut = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (e.ctrlKey && e.shiftKey && ["l", "r", "e", "j"].includes(key)) {
+        const editor = editorRef.current;
+        if (!editor) return;
+        const active = document.activeElement;
+        const editorHasFocus = active === editor || editor.contains(active);
+        const selection = window.getSelection();
+        const selectionInsideEditor = Boolean(selection?.anchorNode && editor.contains(selection.anchorNode));
+        if (!editorHasFocus && !selectionInsideEditor) return;
+        handleAlignmentShortcut(e);
+        return;
+      }
+      if (key !== "z" && key !== "y") return;
+      const editor = editorRef.current;
+      if (!editor) return;
+      const active = document.activeElement;
+      const editorHasFocus = active === editor || editor.contains(active);
+      const selection = window.getSelection();
+      const selectionInsideEditor = Boolean(selection?.anchorNode && editor.contains(selection.anchorNode));
+      if (!editorHasFocus && !selectionInsideEditor) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const redo = key === "y" || (key === "z" && e.shiftKey);
+      logHistory("KEYBOARD_HISTORY_SHORTCUT", { source: redo ? "redo-document" : "undo-document", htmlLength: getCleanEditorHtml().length });
+      if (redo) handleRedo();
+      else handleUndo();
+    };
+    document.addEventListener("keydown", onHistoryShortcut, true);
+    return () => document.removeEventListener("keydown", onHistoryShortcut, true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Called for toolbar-triggered commands (Bold, List, Table, etc). This
+  // deliberately does NOT run the live-highlight logic — that logic walks
+  // and rewraps text nodes, and running it immediately after inserting a
+  // fresh (often still-empty) list or table silently corrupted the just-
+  // inserted structure, which is why "1. List" / "Insert Table" appeared to
+  // do nothing.
+  const exec = (cmd, val = null) => {
+    commitTypingHistory(`before-${cmd}`);
+    captureHistoryBefore(cmd);
+    // Only focus if not already focused — calling .focus() on an
+    // already-focused element can still reset a just-restored Selection in
+    // some browsers, which is what was silently undoing the saved cursor
+    // position for image insertion.
+    if (document.activeElement !== editorRef.current) editorRef.current?.focus();
+    // execCommand fires a native "input" event, which React's onInput
+    // handler on the editor div catches regardless of anything exec()
+    // itself does — this suppress flag is what actually stops the live-
+    // highlight DOM surgery from running immediately after inserting a
+    // fresh list/table/image and corrupting it (an explicit call to
+    // scheduleSave() here was not enough, since the native event fires the
+    // JSX-bound handler independently).
+    suppressHighlightRef.current = true;
+    document.execCommand(cmd, false, val);
+    setTimeout(() => { suppressHighlightRef.current = false; }, 0);
+    commitHistoryAfter(cmd);
+    scheduleSave();
+    updateActiveFormats();
+  };
+  const noStealFocus = (e) => e.preventDefault();
+
+  const contentWidth = Math.max(120, PAGE_WIDTH_PX - pageMargins.left - pageMargins.right);
+  const setPageMargin = (side, value) => {
+    setPageMargins((current) => ({
+      ...current,
+      [side]: clampNumber(value, MIN_PAGE_MARGIN_PX, MAX_PAGE_MARGIN_PX),
+    }));
+  };
+  const resetRulerSettings = () => {
+    setPageMargins(DEFAULT_PAGE_MARGINS);
+    setTabStops([96, 192, 288, 384]);
+  };
+
+  // ---- Ruler drag-and-drop (Word-style): margins, tab stops, paragraph
+  // indent markers. A single generic drag loop is started on mousedown and
+  // torn down on mouseup, so it never leaks listeners between drags.
+  // While any ruler marker is being placed, show a dotted guide line
+  // running through the page at that exact spot — the same idea as Word's
+  // ruler drag guide — so the user can see where it'll land before letting
+  // go, instead of only the small triangle on the ruler itself.
+  const beginRulerDrag = (drag) => {
+    rulerDragRef.current = drag;
+    const scale = zoom / 100;
+    const onMove = (e) => {
+      const d = rulerDragRef.current;
+      if (!d) return;
+      if (d.type === "margin-left") {
+        const v = clampNumber(d.startValue + (e.clientX - d.startClientX) / scale, MIN_PAGE_MARGIN_PX, MAX_PAGE_MARGIN_PX);
+        setPageMargin("left", v);
+        setRulerGuide({ x: v });
+      } else if (d.type === "margin-right") {
+        const v = clampNumber(d.startValue - (e.clientX - d.startClientX) / scale, MIN_PAGE_MARGIN_PX, MAX_PAGE_MARGIN_PX);
+        setPageMargin("right", v);
+        setRulerGuide({ x: PAGE_WIDTH_PX - v });
+      } else if (d.type === "margin-top") {
+        const v = clampNumber(d.startValue + (e.clientY - d.startClientY) / scale, MIN_PAGE_MARGIN_PX, MAX_PAGE_MARGIN_PX);
+        setPageMargin("top", v);
+        setRulerGuide({ y: v });
+      } else if (d.type === "margin-bottom") {
+        const v = clampNumber(d.startValue - (e.clientY - d.startClientY) / scale, MIN_PAGE_MARGIN_PX, MAX_PAGE_MARGIN_PX);
+        setPageMargin("bottom", v);
+        setRulerGuide({ y: PAGE_HEIGHT_PX - v });
+      } else if (d.type === "tab") {
+        const raw = d.origValue + (e.clientX - d.startClientX) / scale;
+        const snapped = Math.round(clampNumber(raw, 0, d.contentWidth - 8) / 8) * 8;
+        setRulerGuide({ x: pageMargins.left + snapped });
+        if (snapped !== d.lastSnapped) {
+          const toRemove = d.lastSnapped;
+          d.lastSnapped = snapped;
+          setTabStops((current) => {
+            const filtered = current.filter((x) => x !== toRemove);
+            return [...filtered, snapped].sort((a, b) => a - b);
+          });
+        }
+      } else if (d.type === "indent-left") {
+        const v = clampNumber(d.startMarginLeft + (e.clientX - d.startClientX) / scale, -80, 180);
+        d.block.style.marginLeft = `${v}px`;
+        setIndentMarkers({ left: v, firstLine: d.startTextIndent });
+        setRulerGuide({ x: pageMargins.left + v });
+      } else if (d.type === "indent-firstline") {
+        const v = clampNumber(d.startTextIndent + (e.clientX - d.startClientX) / scale, -80, 180);
+        d.block.style.textIndent = `${v}px`;
+        setIndentMarkers({ left: d.startMarginLeft, firstLine: v });
+        setRulerGuide({ x: pageMargins.left + d.startMarginLeft + v });
+      }
+    };
+    const onUp = () => {
+      const d = rulerDragRef.current;
+      rulerDragRef.current = null;
+      setRulerGuide(null);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (d && (d.type === "indent-left" || d.type === "indent-firstline")) {
+        commitHistoryAfter(d.type === "indent-left" ? "paragraph-indent" : "first-line-indent");
+        scheduleSave();
+      } else if (d && d.type === "tab") {
+        scheduleSave();
+      } else if (d) {
+        scheduleSave();
+      }
+    };
+    // Show the guide immediately on mousedown too, before any movement.
+    if (drag.type === "margin-left") setRulerGuide({ x: drag.startValue });
+    else if (drag.type === "margin-right") setRulerGuide({ x: PAGE_WIDTH_PX - drag.startValue });
+    else if (drag.type === "margin-top") setRulerGuide({ y: drag.startValue });
+    else if (drag.type === "margin-bottom") setRulerGuide({ y: PAGE_HEIGHT_PX - drag.startValue });
+    else if (drag.type === "tab") setRulerGuide({ x: pageMargins.left + drag.origValue });
+    else if (drag.type === "indent-left") setRulerGuide({ x: pageMargins.left + drag.startMarginLeft });
+    else if (drag.type === "indent-firstline") setRulerGuide({ x: pageMargins.left + drag.startMarginLeft + drag.startTextIndent });
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+  const startMarginDrag = (side) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    beginRulerDrag({
+      type: `margin-${side}`,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startValue: pageMargins[side],
+    });
+  };
+  const startTabDrag = (stop) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    beginRulerDrag({ type: "tab", origValue: stop, lastSnapped: stop, startClientX: e.clientX, contentWidth });
+  };
+  const startIndentDrag = (kind) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const block = getCurrentEditorBlock();
+    if (!block) return;
+    commitTypingHistory(`before-${kind}-indent-drag`);
+    captureHistoryBefore(`${kind}-indent-drag`);
+    const ml = parseFloat(block.style.marginLeft || "0") || 0;
+    const ti = parseFloat(block.style.textIndent || "0") || 0;
+    beginRulerDrag({
+      type: kind === "first-line" ? "indent-firstline" : "indent-left",
+      block,
+      startClientX: e.clientX,
+      startMarginLeft: ml,
+      startTextIndent: ti,
+    });
+  };
+  const getCurrentEditorBlock = () => {
+    const editor = editorRef.current;
+    const sel = window.getSelection();
+    if (!editor || !sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) return null;
+    let node = sel.anchorNode;
+    if (node?.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    const block = node?.closest?.(editorBlockSelector);
+    return block && editor.contains(block) ? block : editor;
+  };
+  const syncIndentMarkers = () => {
+    const block = getCurrentEditorBlock();
+    if (!block) return;
+    const ml = parseFloat(block.style.marginLeft || "0") || 0;
+    const ti = parseFloat(block.style.textIndent || "0") || 0;
+    setIndentMarkers({ left: ml, firstLine: ti });
+  };
+  const adjustSelectedParagraphIndent = (kind, delta) => {
+    const block = getCurrentEditorBlock();
+    if (!block) return;
+    commitTypingHistory(`before-${kind}-indent`);
+    captureHistoryBefore(`${kind}-indent`);
+    const prop = kind === "first-line" ? "textIndent" : "marginLeft";
+    const current = parseFloat(block.style[prop] || window.getComputedStyle(block)[prop] || "0") || 0;
+    block.style[prop] = `${clampNumber(current + delta, -80, 180)}px`;
+    syncIndentMarkers();
+    commitHistoryAfter(`${kind}-indent`);
+    scheduleSave();
+  };
+  const addTabStopAt = (offsetPx) => {
+    const stop = Math.round(clampNumber(offsetPx, 16, contentWidth - 8) / 8) * 8;
+    setTabStops((current) => (
+      current.some((x) => Math.abs(x - stop) < 4)
+        ? current.filter((x) => Math.abs(x - stop) >= 4)
+        : [...current, stop].sort((a, b) => a - b)
+    ));
+  };
+  const addTabStopFromRuler = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    addTabStopAt(e.clientX - rect.left - pageMargins.left);
+  };
+  // A collapsed Range's own getBoundingClientRect() is unreliable right at
+  // the start of an empty block (some browsers report a zero/garbage rect
+  // there because there's no text run to anchor to), which is exactly the
+  // common case when pressing Tab on a fresh line — that's what was making
+  // the caret land at the wrong tab stop instead of the one actually under
+  // it. Measuring a real, briefly-inserted DOM element's rect instead of
+  // the Range's is the standard reliable way to find caret pixel position.
+  const measureCaretX = (editor, sel) => {
+    const editorRect = editor.getBoundingClientRect();
+    const liveRange = sel.getRangeAt(0);
+    const range = liveRange.cloneRange();
+    range.collapse(true);
+    const marker = document.createElement("span");
+    marker.textContent = "\u200b";
+    range.insertNode(marker);
+    const markerRect = marker.getBoundingClientRect();
+    const caretX = Math.max(0, markerRect.left - editorRect.left);
+    const restoreContainer = range.startContainer;
+    const restoreOffset = range.startOffset;
+    marker.remove();
+    try {
+      const restored = document.createRange();
+      restored.setStart(restoreContainer, restoreOffset);
+      restored.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(restored);
+    } catch (e) { /* selection restore best-effort — insertion below still uses the live selection as a fallback */ }
+    return caretX;
+  };
+  const insertTabAtCaret = () => {
+    const editor = editorRef.current;
+    const sel = window.getSelection();
+    if (!editor || !sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) return false;
+    const caretX = measureCaretX(editor, sel);
+    const nextStop = tabStops.find((stop) => stop > caretX + 2);
+    const width = clampNumber((nextStop || caretX + 48) - caretX, 16, 96);
+    insertHtmlAtSelection(`<span class="dep-tab-stop" style="display:inline-block;width:${Math.round(width)}px">&nbsp;</span>`, "tab-stop");
+    return true;
+  };
+
+  const saveSelectionBeforeFocusLoss = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+  const restoreSavedSelection = () => {
+    if (savedRangeRef.current) {
+      editorRef.current?.focus();
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(savedRangeRef.current);
+    }
+  };
+  const ALIGN_COMMANDS = {
+    left: "justifyLeft",
+    center: "justifyCenter",
+    right: "justifyRight",
+    justify: "justifyFull",
+  };
+  const normalizeAlignment = (value) => {
+    const alignment = String(value || "").toLowerCase();
+    if (alignment === "middle") return "center";
+    if (["left", "center", "right", "justify"].includes(alignment)) return alignment;
+    return "justify";
+  };
+  const editorBlockSelector = "p,div,h1,h2,h3,h4,h5,h6,li,td,th,blockquote";
+  const getBlockAlignmentFromRange = (range) => {
+    const editor = editorRef.current;
+    if (!editor || !range) return "justify";
+    let node = range.startContainer;
+    if (node?.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    if (!node || !editor.contains(node)) return "justify";
+    const block = node.closest?.(editorBlockSelector);
+    if (block && editor.contains(block)) {
+      return normalizeAlignment(block.style.textAlign || window.getComputedStyle(block).textAlign);
+    }
+    return normalizeAlignment(window.getComputedStyle(editor).textAlign);
+  };
+  const getCurrentEditorAlignment = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      return getBlockAlignmentFromRange(sel.getRangeAt(0));
+    }
+    if (savedRangeRef.current) return getBlockAlignmentFromRange(savedRangeRef.current);
+    return "justify";
+  };
+  const applyAlignmentToNodes = (nodes, alignment) => {
+    const nextAlignment = normalizeAlignment(alignment);
+    nodes.forEach((node) => {
+      const element = node.nodeType === Node.ELEMENT_NODE ? node : null;
+      if (!element) return;
+      const targets = element.matches(editorBlockSelector)
+        ? [element, ...element.querySelectorAll(editorBlockSelector)]
+        : Array.from(element.querySelectorAll(editorBlockSelector));
+      targets.forEach((target) => {
+        if (!target.style.textAlign) target.style.textAlign = nextAlignment;
+      });
+    });
+  };
+  const alignEditor = (alignment) => {
+    const command = ALIGN_COMMANDS[normalizeAlignment(alignment)];
+    if (!command) return;
+    exec(command);
+  };
+  const handleAlignmentShortcut = (e) => {
+    if (!e.ctrlKey || !e.shiftKey || e.altKey) return false;
+    const key = e.key.toLowerCase();
+    const shortcutAlignment = { l: "left", r: "right", e: "center", j: "justify" }[key];
+    if (!shortcutAlignment) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    alignEditor(shortcutAlignment);
+    return true;
+  };
+  const insertHtmlAtSelection = (html, source = "insert-html") => {
+    const el = editorRef.current;
+    if (!el || !html) return false;
+    commitTypingHistory(`before-${source}`);
+    captureHistoryBefore(source);
+    const liveSel = window.getSelection();
+    const hasLiveSelectionInEditor = Boolean(liveSel && liveSel.rangeCount > 0 && el.contains(liveSel.anchorNode));
+    if (!hasLiveSelectionInEditor) restoreSavedSelection();
+    el.focus();
+    const insertionAlignment = getCurrentEditorAlignment();
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const fragment = template.content.cloneNode(true);
+    const insertedNodes = Array.from(fragment.childNodes);
+    applyAlignmentToNodes(insertedNodes, insertionAlignment);
+    const sel = window.getSelection();
+    const range = sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)
+      ? sel.getRangeAt(0)
+      : document.createRange();
+    if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) {
+      range.selectNodeContents(el);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    range.insertNode(fragment);
+    const after = document.createRange();
+    const lastNode = insertedNodes[insertedNodes.length - 1];
+    if (lastNode?.parentNode) after.setStartAfter(lastNode);
+    else after.selectNodeContents(el);
+    after.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(after);
+    savedRangeRef.current = after.cloneRange();
+    revisionRef.current += 1;
+    commitHistoryAfter(source);
+    const currentHtml = captureCurrentHtml();
+    persistLocalDocument(currentHtml, { pendingSync: true, version: revisionRef.current });
+    scheduleSave();
+    return true;
+  };
+
+  // Applies a font size only to the current SELECTION, not the whole editor.
+  // execCommand("fontSize") only supports the crude legacy 1–7 scale, so we
+  // use it as a marker (size="7") and then swap that for an exact pt value.
+  const applyFontSizeToSelection = (pt) => {
+    // Applied via +/- buttons (with onMouseDown+preventDefault), which never
+    // steal focus in the first place — the live selection is always intact
+    // here, no save/restore needed (a stale restored range from an earlier,
+    // unrelated action would be actively wrong to apply here).
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !editorRef.current?.contains(sel.anchorNode)) {
+      // No text actually selected — nothing sensible to resize (this is what
+      // was previously, incorrectly, resizing the entire editor instead).
+      return;
+    }
+    commitTypingHistory("before-font-size");
+    captureHistoryBefore("font-size");
+    document.execCommand("fontSize", false, "7");
+    editorRef.current.querySelectorAll('font[size="7"]').forEach((f) => {
+      f.removeAttribute("size");
+      f.style.fontSize = pt + "pt";
+    });
+    commitHistoryAfter("font-size");
+    scheduleSave();
+  };
+
+  const hasEditorTextSelection = () => {
+    const editor = editorRef.current;
+    const sel = window.getSelection();
+    return Boolean(editor && sel && !sel.isCollapsed && sel.rangeCount > 0 && editor.contains(sel.anchorNode));
+  };
+
+  const getEditorTextSelectionRange = () => {
+    const editor = editorRef.current;
+    const sel = window.getSelection();
+    if (!editor || !sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return null;
+    return range.cloneRange();
+  };
+
+  const getTextNodeProofreadScope = (node, range) => {
+    const text = node.nodeValue || "";
+    if (!range) return { start: 0, end: text.length };
+    if (!range.intersectsNode(node)) return null;
+    let start = 0;
+    let end = text.length;
+    if (range.startContainer === node) start = Math.min(range.startOffset, text.length);
+    if (range.endContainer === node) end = Math.min(range.endOffset, text.length);
+    if (end <= start) return null;
+    return { start, end };
+  };
+
+  const changeFontSize = (nextSize) => {
+    if (hasEditorTextSelection()) {
+      applyFontSizeToSelection(nextSize);
+      return;
+    }
+    setFontSize(nextSize);
+    scheduleSave();
+  };
+
+  const collectProofreadSuggestions = () => {
+    const editor = editorRef.current;
+    if (!editor) return [];
+    const now = Date.now();
+    const selectedRange = getEditorTextSelectionRange();
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        const parent = node.parentElement;
+        if (!parent || parent.closest(".dep-img-wrap,.dep-table-drop-marker,script,style")) return NodeFilter.FILTER_REJECT;
+        if (selectedRange && !selectedRange.intersectsNode(node)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const suggestions = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const path = nodePathFromEditor(node);
+      if (!path) continue;
+      const scope = getTextNodeProofreadScope(node, selectedRange);
+      if (!scope) continue;
+      const scopedText = (node.nodeValue || "").slice(scope.start, scope.end);
+      splitProofreadSegments(scopedText).forEach((segment) => {
+        const suggested = applySafeGrammarCorrections(segment.text);
+        if (normalizeProofreadComparison(suggested) !== normalizeProofreadComparison(segment.text)) {
+          suggestions.push({
+            id: `${suggestions.length}-${now}-${segment.start}`,
+            path,
+            start: scope.start + segment.start,
+            end: scope.start + segment.end,
+            original: segment.text,
+            suggested,
+          });
+        }
+      });
+    }
+    return suggestions;
+  };
+
+  const openLegalProofread = () => {
+    const suggestions = collectProofreadSuggestions();
+    setProofreadSuggestions(suggestions);
+    setShowProofread(true);
+    if (suggestions.length === 0) {
+      setWorkflowMsg("No capitalization, punctuation, spelling, or legal-language suggestion found.");
+    }
+  };
+
+  const applyProofreadSuggestion = (suggestion) => {
+    const node = nodeFromPath(suggestion.path);
+    if (!node || node.nodeType !== Node.TEXT_NODE) return false;
+    const current = node.nodeValue || "";
+    const start = Number.isInteger(suggestion.start) ? suggestion.start : null;
+    const end = Number.isInteger(suggestion.end) ? suggestion.end : null;
+    if (start !== null && end !== null && current.slice(start, end) === suggestion.original) {
+      node.nodeValue = current.slice(0, start) + suggestion.suggested + current.slice(end);
+      return true;
+    }
+    if (!current.includes(suggestion.original)) return false;
+    node.nodeValue = current.replace(suggestion.original, suggestion.suggested);
+    return true;
+  };
+
+  const updateProofreadSuggestion = (id, suggested) => {
+    setProofreadSuggestions((current) => (
+      current.map((item) => (item.id === id ? { ...item, suggested } : item))
+    ));
+  };
+
+  const acceptProofreadSuggestions = (ids = null) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const selectedIds = ids ? new Set(ids) : null;
+    const selected = proofreadSuggestions.filter((item) => !selectedIds || selectedIds.has(item.id));
+    if (selected.length === 0) return;
+    commitTypingHistory("before-legal-proofread");
+    captureHistoryBefore("legal-proofread");
+    let changed = false;
+    selected.forEach((suggestion) => {
+      if (applyProofreadSuggestion(suggestion)) changed = true;
+    });
+    if (!changed) {
+      discardPendingHistory();
+      setWorkflowMsg("The selected suggestion could not be applied because the text has changed.");
+      return;
+    }
+    commitHistoryAfter("legal-proofread");
+    setProofreadSuggestions((current) => current.filter((item) => selectedIds && !selectedIds.has(item.id)));
+    if (!selectedIds) {
+      setProofreadSuggestions([]);
+      setShowProofread(false);
+    }
+    setWorkflowMsg("Legal proofread suggestion applied. Please verify the corrected text.");
+    clearLiveHighlight();
+    scheduleSave();
+  };
+
+  const rejectProofreadSuggestion = (id) => {
+    setProofreadSuggestions((current) => current.filter((item) => item.id !== id));
+  };
+
+  // Insert a fresh list at the cursor position. execCommand's
+  // insertUnorderedList/insertOrderedList are unreliable inside this
+  // contentEditable (this is what was failing before) — insertHTML is the
+  // same, already-proven-reliable mechanism used for Insert Table.
+  const insertList = (ordered) => {
+    commitTypingHistory(ordered ? "before-ordered-list" : "before-bullet-list");
+    captureHistoryBefore(ordered ? "ordered-list" : "bullet-list");
+    editorRef.current?.focus();
+    const tagName = ordered ? "OL" : "UL";
+    const sel = window.getSelection();
+
+    // If the cursor is already inside a list of the SAME type, add a
+    // sibling <li> to that existing list instead of nesting a brand new
+    // list inside it (which is what was producing the garbled, incorrectly
+    // nested numbering).
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      let node = sel.anchorNode;
+      let existingLi = null, existingList = null;
+      while (node && node !== editorRef.current) {
+        if (node.nodeName === "LI" && !existingLi) existingLi = node;
+        if (node.nodeName === tagName) { existingList = node; break; }
+        node = node.parentNode;
+      }
+      if (existingList && existingLi) {
+        const newLi = document.createElement("li");
+        newLi.innerHTML = "&nbsp;";
+        existingLi.after(newLi);
+        const newRange = document.createRange();
+        newRange.selectNodeContents(newLi);
+        newRange.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+        commitHistoryAfter(ordered ? "ordered-list" : "bullet-list");
+        scheduleSave();
+        applyLiveHighlight();
+        return;
+      }
+    }
+
+    const list = document.createElement(ordered ? "ol" : "ul");
+    const li = document.createElement("li");
+    li.innerHTML = "&nbsp;";
+    list.appendChild(li);
+
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(list);
+    } else {
+      // No valid cursor position in the editor — append at the end instead
+      // of silently failing.
+      editorRef.current?.appendChild(list);
+    }
+    // Place the cursor inside the new list item so typing continues there.
+    const newRange = document.createRange();
+    newRange.selectNodeContents(li);
+    newRange.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    commitHistoryAfter(ordered ? "ordered-list" : "bullet-list");
+    scheduleSave();
+    // Direct DOM manipulation like this does not fire a native "input"
+    // event the way execCommand does, so calling this explicitly is what
+    // cleans up any stale highlight span left over from before the list
+    // was inserted (now safe to call — it's scoped to just the current
+    // block, not the whole editor, so it can't corrupt the fresh list).
+    applyLiveHighlight();
+  };
+
+  const updateActiveFormats = () => {
+    if (document.activeElement !== editorRef.current && !editorRef.current?.contains(document.activeElement)) return;
+    try {
+      setActiveFormats({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+        underline: document.queryCommandState("underline"),
+      });
+    } catch (e) { /* queryCommandState unsupported — leave as-is */ }
+    syncIndentMarkers();
+  };
+  useEffect(() => {
+    const onSelChange = () => {
+      if (editorRef.current && document.activeElement === editorRef.current) updateActiveFormats();
+    };
+    document.addEventListener("selectionchange", onSelChange);
+    return () => document.removeEventListener("selectionchange", onSelChange);
+  }, []);
+
+  // ---- Images: insert wrapped in a natively-resizable container, click to
+  // select, floating toolbar for text-wrap position + crop + delete --------
+
+  const makeImageWrapper = (src) => {
+    const wrap = document.createElement("span");
+    wrap.className = "dep-img-wrap";
+    wrap.setAttribute("contenteditable", "false");
+    wrap.style.cssText = "position:relative;display:inline-block;width:320px;max-width:100%;vertical-align:middle;line-height:0;cursor:move;";
+    const img = document.createElement("img");
+    img.src = src;
+    img.draggable = false;
+    img.style.cssText = "width:100%;height:auto;display:block;";
+    wrap.appendChild(img);
+    return wrap;
+  };
+
+  const insertImage = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      commitTypingHistory("before-image-insert");
+      captureHistoryBefore("image-insert");
+      // The native file-picker dialog (opened between clicking "Insert
+      // Image" and this callback running) steals focus/selection away from
+      // the editor entirely — restoring the saved position first is what
+      // makes the image land at the actual cursor spot instead of the top.
+      restoreSavedSelection();
+      editorRef.current?.focus();
+
+      const wrap = makeImageWrapper(reader.result);
+
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(wrap);
+        // Direct DOM insertion (unlike execCommand) doesn't automatically
+        // move the cursor past what was just inserted — placing it right
+        // after the image keeps typing flowing normally afterward, and is
+        // also what was making sizing inconsistent (the cursor could end
+        // up mid-image-wrapper, confusing later operations).
+        const after = document.createRange();
+        after.setStartAfter(wrap);
+        after.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(after);
+      } else {
+        editorRef.current?.appendChild(wrap);
+      }
+      commitHistoryAfter("image-insert");
+      scheduleSave();
+      applyLiveHighlight();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const onEditorPaste = (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItem = items.find((item) => item.type.startsWith("image/"));
+    if (!imageItem) return;
+    e.preventDefault();
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      commitTypingHistory("before-image-paste");
+      captureHistoryBefore("image-paste");
+      const wrap = makeImageWrapper(reader.result);
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(wrap);
+        const after = document.createRange();
+        after.setStartAfter(wrap);
+        after.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(after);
+      } else {
+        editorRef.current?.appendChild(wrap);
+      }
+      setSelectedImg(wrap);
+      commitHistoryAfter("image-paste");
+      scheduleSave();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const [selectedImg, setSelectedImg] = useState(null); // the .dep-img-wrap element
+  const [cropTarget, setCropTarget] = useState(null); // <img> element being cropped
+
+  // Custom resize handle: injected as a real child element of the selected
+  // wrapper (rather than relying on Chrome's native resize UI, which we've
+  // disabled above since it was conflicting with this). Drag from the
+  // bottom-right corner to resize proportionally.
+  useEffect(() => {
+    document.querySelectorAll(".dep-img-resize-handle").forEach((h) => h.remove());
+    if (!selectedImg) return;
+    selectedImg.style.outline = "2px solid #2563eb";
+    const handle = document.createElement("div");
+    handle.className = "dep-img-resize-handle";
+    handle.style.cssText = "position:absolute;right:-6px;bottom:-6px;width:14px;height:14px;background:#2563eb;border:2px solid #fff;border-radius:50%;cursor:nwse-resize;z-index:10;";
+    handle.onmousedown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startWidth = selectedImg.getBoundingClientRect().width;
+      const onMove = (ev) => {
+        const newWidth = Math.max(40, startWidth + (ev.clientX - startX));
+        selectedImg.style.width = newWidth + "px";
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        commitHistoryAfter("image-resize");
+        scheduleSave();
+      };
+      commitTypingHistory("before-image-resize");
+      captureHistoryBefore("image-resize");
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    };
+    selectedImg.appendChild(handle);
+    return () => {
+      selectedImg.style.outline = "";
+      handle.remove();
+    };
+  }, [selectedImg]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setImageWrap = (mode) => {
+    const wrap = selectedImg;
+    if (!wrap) return;
+    commitTypingHistory(`before-image-wrap-${mode}`);
+    captureHistoryBefore(`image-wrap-${mode}`);
+    wrap.style.float = "none";
+    wrap.style.display = "inline-block";
+    wrap.style.margin = "0";
+    if (mode === "left") { wrap.style.float = "left"; wrap.style.margin = "0 14px 8px 0"; }
+    else if (mode === "right") { wrap.style.float = "right"; wrap.style.margin = "0 0 8px 14px"; }
+    else if (mode === "center") { wrap.style.display = "block"; wrap.style.margin = "10px auto"; }
+    // "inline" leaves float:none, display:inline-block — flows with the text like a large character.
+    commitHistoryAfter(`image-wrap-${mode}`);
+    scheduleSave();
+  };
+  const deleteSelectedImage = () => {
+    if (selectedImg) {
+      commitTypingHistory("before-image-delete");
+      captureHistoryBefore("image-delete");
+      const parent = selectedImg.parentNode;
+      selectedImg.remove();
+      setSelectedImg(null);
+      // Explicitly move the cursor to a known-good position afterward —
+      // otherwise the browser can leave the Selection in an undefined
+      // state after a node removal, which then gets captured as the
+      // "saved range" for the next Insert Image click and can cause that
+      // next image to be inserted somewhere unexpected/broken.
+      if (parent) moveCaretToEnd();
+      commitHistoryAfter("image-delete");
+      scheduleSave();
+    }
+  };
+  const openCrop = () => {
+    const img = selectedImg?.querySelector("img");
+    if (img) setCropTarget(img);
+  };
+  const applyCrop = (dataUrl) => {
+    if (cropTarget) {
+      commitTypingHistory("before-image-crop");
+      captureHistoryBefore("image-crop");
+      cropTarget.src = dataUrl;
+      commitHistoryAfter("image-crop");
+      scheduleSave();
+    }
+    setCropTarget(null);
+  };
+
+  // ---- Tables: click a cell to get a floating row/column toolbar; drag a
+  // cell's right edge to resize that column -------------------------------
+  const [activeCell, setActiveCell] = useState(null);
+  const activeTableRef = useRef(null);
+
+  const cellIndex = (cell) => Array.prototype.indexOf.call(cell.parentElement.children, cell);
+  const rowIndex = (row) => Array.prototype.indexOf.call(row.parentElement.children, row);
+
+  const insertTable = () => {
+    const rowsStr = window.prompt("How many rows?", "2");
+    if (rowsStr === null) return;
+    const colsStr = window.prompt("How many columns?", "2");
+    if (colsStr === null) return;
+    commitTypingHistory("before-table-insert");
+    captureHistoryBefore("table-insert");
+    const rows = Math.max(1, Math.min(20, parseInt(rowsStr, 10) || 2));
+    const cols = Math.max(1, Math.min(10, parseInt(colsStr, 10) || 2));
+
+    editorRef.current?.focus();
+    const table = document.createElement("table");
+    table.className = "dep-table";
+    table.style.cssText = "border-collapse:collapse;width:100%;margin:8px 0;table-layout:fixed;";
+    let firstCell = null;
+    for (let r = 0; r < rows; r++) {
+      const tr = document.createElement("tr");
+      for (let c = 0; c < cols; c++) {
+        const td = document.createElement("td");
+        td.style.cssText = "border:1px solid #000;padding:6px 10px;min-width:40px;position:relative;";
+        td.innerHTML = "&nbsp;";
+        if (!firstCell) firstCell = td;
+        tr.appendChild(td);
+      }
+      table.appendChild(tr);
+    }
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(table);
+    } else {
+      editorRef.current?.appendChild(table);
+    }
+    const newRange = document.createRange();
+    newRange.selectNodeContents(firstCell);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    commitHistoryAfter("table-insert");
+    scheduleSave();
+    applyLiveHighlight();
+  };
+
+  const tableRowAction = (action) => {
+    const cell = activeCell;
+    if (!cell) return;
+    commitTypingHistory(`before-table-row-${action}`);
+    captureHistoryBefore(`table-row-${action}`);
+    const row = cell.closest("tr");
+    const table = cell.closest("table");
+    const rIdx = rowIndex(row);
+    if (action === "above") { const nr = table.insertRow(rIdx); for (let i = 0; i < row.children.length; i++) nr.insertCell(i).innerHTML = "&nbsp;"; }
+    if (action === "below") { const nr = table.insertRow(rIdx + 1); for (let i = 0; i < row.children.length; i++) nr.insertCell(i).innerHTML = "&nbsp;"; }
+    if (action === "delete") { if (table.rows.length > 1) table.deleteRow(rIdx); else { table.parentElement.removeChild(table); setActiveCell(null); } }
+    Array.from(table.querySelectorAll("td")).forEach((td) => { td.style.border = "1px solid #000"; td.style.padding = "6px 10px"; });
+    commitHistoryAfter(`table-row-${action}`);
+    scheduleSave();
+  };
+  const tableColAction = (action) => {
+    const cell = activeCell;
+    if (!cell) return;
+    commitTypingHistory(`before-table-col-${action}`);
+    captureHistoryBefore(`table-col-${action}`);
+    const table = cell.closest("table");
+    const cIdx = cellIndex(cell);
+    const rows = Array.from(table.rows);
+    if (action === "left" || action === "right") {
+      rows.forEach((r) => {
+        const nc = r.insertCell(action === "left" ? cIdx : cIdx + 1);
+        nc.innerHTML = "&nbsp;";
+        nc.style.border = "1px solid #000";
+        nc.style.padding = "6px 10px";
+      });
+    }
+    if (action === "delete") {
+      if (rows[0].cells.length > 1) rows.forEach((r) => r.deleteCell(cIdx));
+      else { table.parentElement.removeChild(table); setActiveCell(null); }
+    }
+    commitHistoryAfter(`table-col-${action}`);
+    scheduleSave();
+  };
+  const deleteWholeTable = () => {
+    const table = activeCell?.closest("table");
+    if (table) {
+      commitTypingHistory("before-table-delete");
+      captureHistoryBefore("table-delete");
+      table.remove();
+      setActiveCell(null);
+      commitHistoryAfter("table-delete");
+      scheduleSave();
+    }
+  };
+  const focusCellAfterTableMove = (cell) => {
+    if (!cell?.isConnected) return;
+    setActiveCell(cell);
+    moveCaretInto(cell, true);
+  };
+  const moveWholeTable = (direction) => {
+    setWorkflowMsg("");
+    const table = activeCell?.closest("table");
+    if (!table) return;
+    const parent = table.parentNode;
+    if (!parent) return;
+    commitTypingHistory(`before-table-move-${direction}`);
+    captureHistoryBefore(`table-move-${direction}`);
+    if (direction === "up") {
+      const previous = table.previousElementSibling;
+      if (!previous) { discardPendingHistory(); setWorkflowMsg("The table cannot be moved further in this direction."); return; }
+      parent.insertBefore(table, previous);
+    } else {
+      const next = table.nextElementSibling;
+      if (!next) { discardPendingHistory(); setWorkflowMsg("The table cannot be moved further in this direction."); return; }
+      parent.insertBefore(next, table);
+    }
+    revisionRef.current += 1;
+    focusCellAfterTableMove(activeCell);
+    commitHistoryAfter(`table-move-${direction}`);
+    scheduleSave();
+  };
+  const insertParagraphNearTable = (where) => {
+    const table = activeCell?.closest("table");
+    if (!table) return;
+    commitTypingHistory(`before-table-paragraph-${where}`);
+    captureHistoryBefore(`table-paragraph-${where}`);
+    const p = document.createElement("p");
+    p.innerHTML = "<br>";
+    if (where === "before") table.parentNode.insertBefore(p, table);
+    else table.parentNode.insertBefore(p, table.nextSibling);
+    revisionRef.current += 1;
+    moveCaretInto(p);
+    setActiveCell(null);
+    commitHistoryAfter(`table-paragraph-${where}`);
+    scheduleSave();
+  };
+
+  // Column-resize: mousedown near a cell's right edge starts a drag that
+  // adjusts that column's width across every row (so columns stay aligned).
+  const colResizeState = useRef(null);
+  const rowResizeState = useRef(null);
+  const dragStateRef = useRef(null);
+  const tableDropMarkerRef = useRef(null);
+
+  const onEditorMouseDown = (e) => {
+    const imgWrap = e.target.closest?.(".dep-img-wrap");
+    if (imgWrap && editorRef.current?.contains(imgWrap)) {
+      dragStateRef.current = { el: imgWrap, type: "image" };
+      e.preventDefault();
+      return;
+    }
+    const cell = e.target.closest?.("td,th");
+    if (cell && editorRef.current?.contains(cell)) {
+      const rect = cell.getBoundingClientRect();
+      if (rect.right - e.clientX < 8) {
+        const table = cell.closest("table");
+        const idx = cellIndex(cell);
+        commitTypingHistory("before-table-column-resize");
+        captureHistoryBefore("table-column-resize");
+        colResizeState.current = { table, idx, startX: e.clientX, startWidth: rect.width };
+        e.preventDefault();
+      } else if (rect.bottom - e.clientY < 8) {
+        const row = cell.closest("tr");
+        commitTypingHistory("before-table-row-resize");
+        captureHistoryBefore("table-row-resize");
+        rowResizeState.current = { row, startY: e.clientY, startHeight: rect.height };
+        e.preventDefault();
+      }
+    }
+  };
+
+  const startTableDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const table = activeTableRef.current || activeCell?.closest("table");
+    if (!table || !editorRef.current?.contains(table)) return;
+    flushPendingHistoryBatch("before-table-drag");
+    captureHistoryBefore("table-drag");
+    if (e.pointerId != null && e.currentTarget?.setPointerCapture) {
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* pointer capture unavailable */ }
+    }
+    const marker = document.createElement("div");
+    marker.className = "dep-table-drop-marker";
+    marker.setAttribute("contenteditable", "false");
+    marker.style.cssText = "height:0;border-top:3px solid #2563eb;margin:6px 0;pointer-events:none;";
+    tableDropMarkerRef.current = marker;
+    dragStateRef.current = { el: table, type: "table", sourceCell: activeCell, pointerId: e.pointerId ?? null };
+    table.style.opacity = "0.55";
+    table.style.outline = "2px dashed #2563eb";
+  };
+
+  useEffect(() => {
+    const removeTableDropMarker = () => {
+      tableDropMarkerRef.current?.remove();
+      tableDropMarkerRef.current = null;
+    };
+    const blockChildForRange = (range) => {
+      const editor = editorRef.current;
+      if (!editor || !range) return null;
+      if (range.startContainer === editor) return { editorDrop: true };
+      let node = range.startContainer;
+      if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+      if (!editor.contains(node) || node.closest?.("td,th")) return null;
+      while (node && node.parentNode !== editor) node = node.parentNode;
+      return node && node !== editor ? node : null;
+    };
+    const blockChildForPoint = (x, y) => {
+      const editor = editorRef.current;
+      if (!editor) return null;
+      const el = document.elementFromPoint(x, y);
+      if (!el || !editor.contains(el) || el.closest?.(".dep-table-drop-marker")) return null;
+      if (el.closest?.("td,th,thead,tbody,tr")) return null;
+      let node = el;
+      while (node && node.parentNode !== editor) node = node.parentNode;
+      return node && node !== editor ? node : { editorDrop: true };
+    };
+    const placeTableDropMarker = (e, table) => {
+      const editor = editorRef.current;
+      const marker = tableDropMarkerRef.current;
+      if (!editor || !marker) return false;
+      const range = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+      if (range && table.contains(range.startContainer)) {
+        removeTableDropMarker();
+        return false;
+      }
+      const block = range && editor.contains(range.startContainer)
+        ? blockChildForRange(range)
+        : blockChildForPoint(e.clientX, e.clientY);
+      if (block?.editorDrop) {
+        editor.appendChild(marker);
+        return true;
+      }
+      if (!block || block === marker || block === table) {
+        removeTableDropMarker();
+        return false;
+      }
+      const rect = block.getBoundingClientRect();
+      if (e.clientY > rect.top + rect.height / 2) block.after(marker);
+      else editor.insertBefore(marker, block);
+      return true;
+    };
+    const onDragMove = (e) => {
+      const st = dragStateRef.current;
+      if (!st) return;
+      e.preventDefault();
+      if (st.type === "table") placeTableDropMarker(e, st.el);
+    };
+    const onDragEnd = (e) => {
+      const st = dragStateRef.current;
+      if (!st) return;
+      dragStateRef.current = null;
+      if (st.type === "table") {
+        st.el.style.opacity = "";
+        st.el.style.outline = "";
+        const marker = tableDropMarkerRef.current;
+        if (!marker?.isConnected) {
+          discardPendingHistory();
+          removeTableDropMarker();
+          setWorkflowMsg("The table cannot be dropped at this location.");
+          return;
+        }
+        marker.parentNode.insertBefore(st.el, marker);
+        removeTableDropMarker();
+        revisionRef.current += 1;
+        focusCellAfterTableMove(st.sourceCell || st.el.querySelector("td,th"));
+        commitHistoryAfter("table-drag");
+        scheduleSave();
+        return;
+      }
+      const dropRange = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+      if (dropRange && editorRef.current?.contains(dropRange.startContainer) && !st.el.contains(dropRange.startContainer)) {
+        commitTypingHistory("before-image-drag");
+        captureHistoryBefore("image-drag");
+        st.el.remove();
+        dropRange.insertNode(st.el);
+        commitHistoryAfter("image-drag");
+        scheduleSave();
+      }
+    };
+    const onCancel = (e) => {
+      if (e.key !== "Escape" || !dragStateRef.current) return;
+      if (dragStateRef.current.type === "table") {
+        dragStateRef.current.el.style.opacity = "";
+        dragStateRef.current.el.style.outline = "";
+        discardPendingHistory();
+      }
+      dragStateRef.current = null;
+      removeTableDropMarker();
+    };
+    document.addEventListener("mousemove", onDragMove);
+    document.addEventListener("mouseup", onDragEnd);
+    document.addEventListener("pointermove", onDragMove);
+    document.addEventListener("pointerup", onDragEnd);
+    document.addEventListener("pointercancel", onDragEnd);
+    document.addEventListener("keydown", onCancel);
+    window.addEventListener("blur", onDragEnd);
+    return () => {
+      document.removeEventListener("mousemove", onDragMove);
+      document.removeEventListener("mouseup", onDragEnd);
+      document.removeEventListener("pointermove", onDragMove);
+      document.removeEventListener("pointerup", onDragEnd);
+      document.removeEventListener("pointercancel", onDragEnd);
+      document.removeEventListener("keydown", onCancel);
+      window.removeEventListener("blur", onDragEnd);
+      removeTableDropMarker();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onMove = (e) => {
+      const cst = colResizeState.current;
+      if (cst) {
+        const newWidth = Math.max(24, cst.startWidth + (e.clientX - cst.startX));
+        Array.from(cst.table.rows).forEach((r) => {
+          const c = r.cells[cst.idx];
+          if (c) c.style.width = newWidth + "px";
+        });
+      }
+      const rst = rowResizeState.current;
+      if (rst) {
+        const newHeight = Math.max(20, rst.startHeight + (e.clientY - rst.startY));
+        rst.row.style.height = newHeight + "px";
+        Array.from(rst.row.cells).forEach((c) => { c.style.height = newHeight + "px"; });
+      }
+    };
+    const onUp = () => {
+      if (colResizeState.current) { colResizeState.current = null; commitHistoryAfter("table-column-resize"); scheduleSave(); }
+      if (rowResizeState.current) { rowResizeState.current = null; commitHistoryAfter("table-row-resize"); scheduleSave(); }
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Click anywhere in the editor: figure out whether an image or a table
+  // cell was clicked, and show the matching floating toolbar just above it.
+  const onEditorClick = (e) => {
+    const imgWrap = e.target.closest?.(".dep-img-wrap");
+    const cell = e.target.closest?.("td,th");
+    if (imgWrap) {
+      setSelectedImg(imgWrap);
+      setActiveCell(null);
+      activeTableRef.current = null;
+    } else if (cell) {
+      setActiveCell(cell);
+      activeTableRef.current = cell.closest("table");
+      setSelectedImg(null);
+    } else {
+      setSelectedImg(null);
+      setActiveCell(null);
+      activeTableRef.current = null;
+    }
+    updateActiveFormats();
+  };
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Delete" && selectedImg) {
+        deleteSelectedImage();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedImg]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const depositionPdfFilename = () => {
+    const safePart = (value, fallback) => String(value || fallback || "")
+      .trim()
+      .replace(/[<>:"/\\|?*\x00-\x1f]+/g, "_")
+      .replace(/\s+/g, " ")
+      .replace(/[ ._]+$/g, "");
+    return `${safePart(dep?.primary_case_number, "case")}_${safePart(dep?.witness_name, "witness")}.pdf`;
+  };
+
+  const openPdf = async () => {
+    const res = await api.get(`/depositions/${depId}/print`, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    setPdfPreview((current) => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return { url, filename: depositionPdfFilename() };
+    });
+  };
+
+  const closePdfPreview = () => {
+    setPdfPreview((current) => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return null;
+    });
+  };
+
+  const downloadPdfPreview = () => {
+    if (!pdfPreview?.url) return;
+    const link = document.createElement("a");
+    link.href = pdfPreview.url;
+    link.download = pdfPreview.filename || depositionPdfFilename();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  // Adds a fresh, plain (non-bold) paragraph after whatever was just
+  // inserted, and moves the cursor into it — otherwise the cursor was left
+  // inside the just-inserted <strong> text, carrying bold formatting into
+  // everything typed afterward.
+  const appendFreshParagraphAndFocus = () => {
+    const el = editorRef.current;
+    if (!el) return;
+    const p = document.createElement("p");
+    p.style.textAlign = getCurrentEditorAlignment();
+    p.innerHTML = "<br>";
+    el.appendChild(p);
+    el.focus();
+    const range = document.createRange();
+    range.setStart(p, 0);
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+
+  const doHostile = async () => {
+    console.log("HOSTILE_BUTTON_CLICKED");
+    serverMutationRef.current = true;
+    try {
+      const { data } = await api.get(`/depositions/${depId}/standard-text/hostile`);
+      const existingStatement = data.statement_html || "";
+      console.log("EXISTING_STATEMENT_RESOLVED", {
+        action: "hostile",
+        statementExists: Boolean(existingStatement),
+        statementLength: existingStatement.length,
+        statementType: typeof existingStatement,
+      });
+      const inserted = insertHtmlAtSelection(existingStatement, "hostile");
+      console.log("STATEMENT_INSERT_RESULT", {
+        action: "hostile",
+        inserted,
+        depositionId: depId,
+        selection: savedRangeRef.current ? { collapsed: savedRangeRef.current.collapsed } : null,
+      });
+    } finally {
+      serverMutationRef.current = false;
+    }
+  };
+  const doStartCross = async () => {
+    console.log("START_CROSS_BUTTON_CLICKED");
+    serverMutationRef.current = true;
+    try {
+      const { data } = await api.get(`/depositions/${depId}/standard-text/start-cross`);
+      const existingStatement = data.statement_html || "";
+      console.log("EXISTING_STATEMENT_RESOLVED", {
+        action: "start-cross",
+        statementExists: Boolean(existingStatement),
+        statementLength: existingStatement.length,
+        statementType: typeof existingStatement,
+      });
+      const inserted = insertHtmlAtSelection(existingStatement, "start-cross");
+      console.log("STATEMENT_INSERT_RESULT", {
+        action: "start-cross",
+        inserted,
+        depositionId: depId,
+        selection: savedRangeRef.current ? { collapsed: savedRangeRef.current.collapsed } : null,
+      });
+    } finally {
+      serverMutationRef.current = false;
+    }
+  };
+  const doComplete = async () => {
+    if (!window.confirm("Mark this deposition as Complete? This finalizes the record. You can still return here afterwards to correct mistakes if needed.")) return;
+    if (syncStatus === "offline" || pendingServerHtmlRef.current) { alert("Cannot complete while the latest text is waiting for server sync. Please wait until it shows Saved to Local Server."); return; }
+    if (!editorRef.current) { alert("Editor not ready — please try again."); return; }
+    const html = getCleanEditorHtml();
+    if (isSuspiciouslyEmpty(html)) { alert("The typed text appears to be missing — please don't proceed until you can see it in the editor."); return; }
+    await persistLocalDocument(html, { pendingSync: true });
+    await syncDocumentToBackend(html, { throwOnError: true });
+    const { data } = await api.post(`/depositions/${depId}/complete`);
+    setDep((d) => ({ ...d, ...data, status: data.status || "completed" }));
+    setWorkflowMsg("Deposition marked Complete. Please review the print preview before leaving this page.");
+    await openPdf();
+  };
+
+  const openAdjourn = async () => {
+    setWorkflowMsg("");
+    clearTimeout(saveTimer.current);
+    const html = captureCurrentHtml();
+    try {
+      await persistLocalDocumentStrict(html, { pendingSync: true });
+      pendingServerHtmlRef.current = html;
+      syncDocumentToBackend(html);
+    } catch (localSaveError) {
+      console.error("Local deposition save failed before opening Adjourn", localSaveError);
+      setWorkflowMsg("The latest deposition could not be preserved locally. Adjournment has not been opened.");
+      return;
+    }
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const localValue = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    setAdjournNextDate(adjournNextDate || localValue);
+    setShowAdjourn(true);
+  };
+  const submitAdjourn = async () => {
+    setWorkflowMsg("");
+    if (!adjournReason || !adjournNextDate) { setWorkflowMsg("Please fill in the Reason and the Next Date & Time."); return; }
+    if (!editorRef.current && !latestContentRef.current) { setWorkflowMsg("Editor is not ready. Please try again."); return; }
+    const html = captureCurrentHtml();
+    if (isSuspiciouslyEmpty(html)) { setWorkflowMsg("The typed text appears to be missing. Please do not proceed until you can see it in the editor."); return; }
+    let localDoc;
+    try {
+      localDoc = await persistLocalDocumentStrict(html, { pendingSync: true });
+    } catch (localSaveError) {
+      console.error("Local deposition save failed before Adjourn submit", localSaveError);
+      setWorkflowMsg("The latest deposition could not be preserved locally. Adjournment has not been submitted.");
+      return;
+    }
+    let queuedAdjournment;
+    try {
+      queuedAdjournment = await queueAdjournmentLocally({
+        reason: adjournReason,
+        nextDateTime: adjournNextDate,
+        adjournedFor: adjournFor,
+        editorRevision: localDoc.version,
+      });
+    } catch (localAdjournError) {
+      console.error("Local adjournment queue failed", localAdjournError);
+      setWorkflowMsg("The adjournment details could not be preserved locally. Adjournment has not been submitted.");
+      return;
+    }
+
+    pendingServerHtmlRef.current = html;
+    syncDocumentToBackend(html);
+    try {
+      const { data } = await api.post(`/depositions/${depId}/adjourn`, { reason: adjournReason, next_date_time: adjournNextDate, adjourn_for: adjournFor });
+      await idbDelete(DEP_ADJOURN_STORE, queuedAdjournment.id);
+      setDep((d) => ({ ...d, ...data, status: data.status || "adjourned" }));
+      setShowAdjourn(false);
+      setWorkflowMsg("");
+      await openPdf();
+    } catch (serverError) {
+      console.error("Backend adjournment save failed; local queue retained", serverError);
+      setDep((d) => ({ ...d, status: "adjourned" }));
+      setShowAdjourn(false);
+      setWorkflowMsg("Adjournment saved locally. Server synchronization pending.");
+      setSyncStatus("offline");
+    }
+  };
+  const [allSettings, setAllSettings] = useState({ hostile_text: {}, start_cross_text: {} });
+  const [settingsLang, setSettingsLang] = useState("gu");
+
+  const openSettings = async () => {
+    setSettingsMsg("");
+    let data = { hostile_text: {}, start_cross_text: {} };
+    try {
+      const res = await api.get("/judge-users/me/settings");
+      data = res.data;
+    } catch (e) { /* no custom settings saved yet — fine, fields start blank */ }
+    setAllSettings(data);
+    const lang = dep.language || "gu";
+    setSettingsLang(lang);
+    setSettingsHostile(data.hostile_text?.[lang] || "");
+    setSettingsStartCross(data.start_cross_text?.[lang] || "");
+    setShowSettings(true);
+  };
+  const switchSettingsLang = (lang) => {
+    setSettingsLang(lang);
+    setSettingsHostile(allSettings.hostile_text?.[lang] || "");
+    setSettingsStartCross(allSettings.start_cross_text?.[lang] || "");
+  };
+  const saveSettings = async () => {
+    try {
+      await api.put("/judge-users/me/settings", {
+        language: settingsLang,
+        hostile_text: settingsHostile,
+        start_cross_text: settingsStartCross,
+      });
+      setAllSettings((prev) => ({
+        hostile_text: { ...prev.hostile_text, [settingsLang]: settingsHostile },
+        start_cross_text: { ...prev.start_cross_text, [settingsLang]: settingsStartCross },
+      }));
+      setSettingsMsg(`Saved — applies only to your own account, for future Depositions in ${LANG_OPTIONS.find((o) => o.value === settingsLang)?.label}.`);
+    } catch (e) {
+      setSettingsMsg(e.response?.data?.detail || "Failed to save.");
+    }
+  };
+
+  const renderSyncStatus = () => {
+    if (syncStatus === "auth-lost") {
+      return <span style={{ color: "#fde68a", fontWeight: 700 }}>Login expired. Text saved locally; server sync paused.</span>;
+    }
+    if (syncStatus === "offline") {
+      return <span style={{ color: "#fecaca", fontWeight: 700 }}>Connection lost. Text saved locally. Retrying server sync...</span>;
+    }
+    if (syncStatus === "loading") {
+      return <span style={{ color: "#bfdbfe", fontWeight: 600 }}>Loading saved deposition...</span>;
+    }
+    if (syncStatus === "saving" || saving) {
+      return <span style={{ color: "#fde68a", fontWeight: 600 }}>Saving changes...</span>;
+    }
+    return <span style={{ color: "#86efac", fontWeight: 600 }}>Saved to Local Server</span>;
+  };
+  const renderVoiceEngineStatus = () => {
+    if (voiceEngine === "ai") return <span style={{ color: "#bbf7d0", fontWeight: 700 }}>Voice: AI speech model</span>;
+    if (voiceEngine === "browser") return <span style={{ color: "#bfdbfe", fontWeight: 700 }}>Voice: Browser Speech API</span>;
+    if (voiceEngine === "unavailable") return <span style={{ color: "#fecaca", fontWeight: 700 }}>Voice: unavailable</span>;
+    return <span style={{ color: "#d1d5db", fontWeight: 600 }}>Voice: ready</span>;
+  };
+
+  if (!dep) return <div className="app-shell"><TopBar title="Deposition" /><div className="page">Loading...</div></div>;
+
+  return (
+    <div className="app-shell" data-testid="deposition-typing-page">
+      <style>{`
+        .live-sentence { background: ${highlightColor}; }
+        ::highlight(dep-live-sentence) { background: ${highlightColor}; }
+        .dep-toolbar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:8px 10px; background:#f3f4f6; border-bottom:1px solid var(--border); }
+        .dep-toolbar button { padding:6px 10px; border:1px solid var(--border); background:#fff; border-radius:4px; cursor:pointer; }
+        .dep-toolbar button:hover { background:#eee; }
+        .dep-ruler-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:6px 12px; background:#eef2f7; border-bottom:1px solid var(--border); font-size:12px; }
+        .dep-ruler-tools label { display:flex; align-items:center; gap:4px; }
+        .dep-ruler-tools input { width:52px; padding:3px 4px; border:1px solid var(--border); border-radius:4px; }
+        .dep-ruler-tools button { padding:4px 8px; border:1px solid var(--border); background:#fff; border-radius:4px; cursor:pointer; }
+        .dep-canvas { background:#e5e7eb; padding:12px 24px 24px; overflow:auto; }
+        .dep-ruler-grid { display:grid; grid-template-columns:32px max-content; grid-template-rows:28px max-content; justify-content:center; align-items:start; }
+        .dep-ruler-corner { width:32px; height:28px; background:#d1d5db; border:1px solid #b6beca; box-sizing:border-box; }
+        .dep-horizontal-ruler { position:relative; width:794px; height:28px; background:#fff; border:1px solid #b6beca; border-left:0; box-sizing:border-box; cursor:crosshair; user-select:none; }
+        .dep-vertical-ruler { position:relative; width:32px; height:1123px; background:#fff; border:1px solid #b6beca; border-top:0; box-sizing:border-box; user-select:none; }
+        .dep-ruler-tick { position:absolute; background:#6b7280; }
+        .dep-ruler-label { position:absolute; color:#4b5563; font-size:10px; }
+        .dep-ruler-margin { position:absolute; background:rgba(37,99,235,.16); border:1px solid rgba(37,99,235,.55); box-sizing:border-box; }
+        .dep-ruler-marker { position:absolute; width:0; height:0; transform:translateX(-50%); cursor:ew-resize; }
+        .dep-ruler-marker.tab { border-left:5px solid transparent; border-right:5px solid transparent; border-top:9px solid #2563eb; top:17px; }
+        .dep-ruler-marker.left { border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:10px solid #16a34a; top:2px; }
+        .dep-ruler-marker.right { border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:10px solid #dc2626; top:2px; }
+        .dep-ruler-marker.indent-firstline { border-left:5px solid transparent; border-right:5px solid transparent; border-top:8px solid #7c3aed; top:0px; z-index:2; }
+        .dep-ruler-marker.indent-left { border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:8px solid #7c3aed; top:19px; z-index:2; }
+        .dep-ruler-marker-v { position:absolute; width:0; height:0; transform:translateY(-50%); cursor:ns-resize; left:20px; }
+        .dep-ruler-marker-v.top { border-top:6px solid transparent; border-bottom:6px solid transparent; border-left:10px solid #16a34a; }
+        .dep-ruler-marker-v.bottom { border-top:6px solid transparent; border-bottom:6px solid transparent; border-left:10px solid #dc2626; }
+        .dep-page-area { position:relative; display:flex; justify-content:center; }
+        .dep-ruler-guide-v { position:absolute; top:0; bottom:0; width:0; border-left:1px dashed #2563eb; pointer-events:none; z-index:5; }
+        .dep-ruler-guide-h { position:absolute; left:0; right:0; height:0; border-top:1px dashed #2563eb; pointer-events:none; z-index:5; }
+        .dep-page { background:#fff; width:794px; min-height:1123px; box-shadow:0 0 8px rgba(0,0,0,.15); box-sizing:border-box; outline:none; text-align:justify; text-justify:inter-word; }
+        .dep-page p, .dep-page div, .dep-page li, .dep-page td, .dep-page th { text-align:justify; text-justify:inter-word; }
+        .dep-page ul { list-style: disc; padding-left: 28px; margin: 8px 0; }
+        .dep-page ol { list-style: decimal; padding-left: 28px; margin: 8px 0; }
+        .dep-page ul[style*="text-align"], .dep-page ol[style*="text-align"],
+        .dep-page li[style*="text-align"] { list-style-position: inside; }
+        .dep-page li { display: list-item; }
+        .dep-page table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; }
+        .dep-page td, .dep-page th { overflow-wrap: anywhere; vertical-align: top; }
+        @media print { .dep-table-drop-marker { display: none !important; } }
+        .dep-bottombar { position:sticky; bottom:0; display:flex; flex-wrap:wrap; gap:14px; align-items:center; justify-content:space-between; padding:10px 16px; background:#1f2937; color:#fff; }
+        .dep-bottombar .grp { display:flex; gap:8px; align-items:center; }
+        .dep-bottombar button { padding:7px 12px; border-radius:4px; border:none; cursor:pointer; font-weight:600; }
+      `}</style>
+      <TopBar title={`Deposition — ${dep.witness_name}`} />
+      {(dep.status === "completed" || dep.status === "adjourned") && (
+        <div style={{ background: dep.status === "completed" ? "#dcfce7" : "#fee2e2", color: dep.status === "completed" ? "#166534" : "#991b1b", padding: "8px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>
+            This deposition is marked <strong>{dep.status === "completed" ? "Complete" : "Adjourned"}</strong>.
+            You can still make corrections here and re-print if needed.
+          </span>
+          <button className="btn btn-secondary" style={{ padding: "6px 12px" }} onClick={() => navigate("/judge-desk/oral-evidence")}>
+            Done — Back to Oral Evidence
+          </button>
+        </div>
+      )}
+      {workflowMsg && (
+        <div style={{ background: "#fef3c7", color: "#92400e", padding: "8px 16px", borderBottom: "1px solid #f59e0b", fontWeight: 600 }}>
+          {workflowMsg}
+        </div>
+      )}
+      <div className="dep-toolbar">
+        <button onMouseDown={noStealFocus} onClick={() => exec("bold")} style={activeFormats.bold ? activeBtnStyle : undefined}><b>B</b></button>
+        <button onMouseDown={noStealFocus} onClick={() => exec("italic")} style={activeFormats.italic ? activeBtnStyle : undefined}><i>I</i></button>
+        <button onMouseDown={noStealFocus} onClick={() => exec("underline")} style={activeFormats.underline ? activeBtnStyle : undefined}><u>U</u></button>
+        <span style={{ fontSize: 13 }}>Font size:</span>
+        <button onMouseDown={noStealFocus} onClick={() => changeFontSize(Math.max(8, fontSize - 1))}>−</button>
+        <span style={{ minWidth: 24, textAlign: "center", display: "inline-block" }}>{fontSize}</span>
+        <button onMouseDown={noStealFocus} onClick={() => changeFontSize(Math.min(48, fontSize + 1))}>+</button>
+        <button onMouseDown={noStealFocus} onClick={() => alignEditor("left")} title="Left align (Ctrl+Shift+L)">⟸</button>
+        <button onMouseDown={noStealFocus} onClick={() => alignEditor("center")} title="Middle align (Ctrl+Shift+E)">≡</button>
+        <button onMouseDown={noStealFocus} onClick={() => alignEditor("right")} title="Right align (Ctrl+Shift+R)">⟹</button>
+        <button onMouseDown={noStealFocus} onClick={() => alignEditor("justify")} title="Justify (Ctrl+Shift+J)">☰</button>
+        <button onMouseDown={noStealFocus} onClick={() => insertList(false)}>• List</button>
+        <button onMouseDown={noStealFocus} onClick={() => insertList(true)}>1. List</button>
+        <button onMouseDown={noStealFocus} onClick={openLegalProofread} title="Review capitalization, punctuation, spelling, and legal-language suggestions">Legal Proofread</button>
+        <input type="color" value={highlightColor} onChange={(e) => { setHighlightColor(e.target.value); localStorage.setItem("dep_highlight_color", e.target.value); }} title="Highlight colour" />
+        <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 4 }}>
+          <input type="checkbox" checked={highlightOn} onChange={(e) => { setHighlightOn(e.target.checked); localStorage.setItem("dep_highlight_on", e.target.checked ? "1" : "0"); }} />
+          Live sentence highlight
+        </label>
+        <label className="btn btn-outline" style={{ padding: "6px 10px", cursor: "pointer" }} onMouseDown={saveSelectionBeforeFocusLoss}>
+          Insert Image
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={insertImage} />
+        </label>
+        <button onMouseDown={noStealFocus} onClick={insertTable}>Insert Table</button>
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); logHistory("UNDO_BUTTON_POINTER_DOWN", { source: "toolbar", htmlLength: getCleanEditorHtml().length }); handleUndo(); }} style={!historyAvailability.canUndo ? { opacity: 0.55 } : undefined} aria-disabled={!historyAvailability.canUndo} title="Undo (Ctrl+Z)">Undo</button>
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); handleRedo(); }} style={!historyAvailability.canRedo ? { opacity: 0.55 } : undefined} aria-disabled={!historyAvailability.canRedo} title="Redo (Ctrl+Y)">Redo</button>
+        <button type="button" onMouseDown={noStealFocus} onClick={() => setShowRuler((v) => !v)} style={showRuler ? { borderColor: "#2563eb", color: "#2563eb", fontWeight: 600 } : undefined} title="Show/hide the ruler to set margins, tab stops and paragraph indent" aria-pressed={showRuler}>{"\u{1F4CF}"} Ruler</button>
+        <button onMouseDown={noStealFocus} onClick={openSettings} style={{ marginLeft: "auto" }} data-testid="dep-settings-btn">⚙ Settings</button>
+      </div>
+
+      {selectedImg && (
+        <div
+          style={{ background: "#1f2937", padding: "8px 16px", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <span style={{ color: "#fff", fontSize: 13, marginRight: 4 }}>Image:</span>
+          <button onClick={() => setImageWrap("inline")} title="In line with text" style={imgBtnStyle}>Inline</button>
+          <button onClick={() => setImageWrap("left")} title="Wrap text — image on the left" style={imgBtnStyle}>⇤ Wrap</button>
+          <button onClick={() => setImageWrap("right")} title="Wrap text — image on the right" style={imgBtnStyle}>Wrap ⇥</button>
+          <button onClick={() => setImageWrap("center")} title="Center, text above/below" style={imgBtnStyle}>Center</button>
+          <button onClick={openCrop} title="Crop" style={imgBtnStyle}>Crop</button>
+          <button onClick={deleteSelectedImage} title="Delete image" style={{ ...imgBtnStyle, background: "#dc2626" }}>Delete</button>
+        </div>
+      )}
+
+      {activeCell && (
+        <div
+          style={{ background: "#1f2937", padding: "8px 16px", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <span style={{ color: "#fff", fontSize: 13, marginRight: 4 }}>Table:</span>
+          <button type="button" onPointerDown={startTableDrag} style={{ ...imgBtnStyle, cursor: "grab", touchAction: "none" }} title="Drag to move the whole table">⠿ Move</button>
+          <button onClick={() => moveWholeTable("up")} style={imgBtnStyle}>Move Table Up</button>
+          <button onClick={() => moveWholeTable("down")} style={imgBtnStyle}>Move Table Down</button>
+          <button onClick={() => insertParagraphNearTable("before")} style={imgBtnStyle}>Para Before</button>
+          <button onClick={() => insertParagraphNearTable("after")} style={imgBtnStyle}>Para After</button>
+          <button onClick={() => tableRowAction("above")} style={imgBtnStyle}>Row ↑ Insert</button>
+          <button onClick={() => tableRowAction("below")} style={imgBtnStyle}>Row ↓ Insert</button>
+          <button onClick={() => tableRowAction("delete")} style={imgBtnStyle}>Delete Row</button>
+          <button onClick={() => tableColAction("left")} style={imgBtnStyle}>Col ← Insert</button>
+          <button onClick={() => tableColAction("right")} style={imgBtnStyle}>Col → Insert</button>
+          <button onClick={() => tableColAction("delete")} style={imgBtnStyle}>Delete Col</button>
+          <button onClick={deleteWholeTable} style={{ ...imgBtnStyle, background: "#dc2626" }}>Delete Table</button>
+        </div>
+      )}
+
+      {showRuler && (
+      <div className="dep-ruler-tools">
+        <strong>Ruler</strong>
+        <label>Top <input type="number" value={pageMargins.top} min={MIN_PAGE_MARGIN_PX} max={MAX_PAGE_MARGIN_PX} onChange={(e) => setPageMargin("top", e.target.value)} /></label>
+        <label>Left <input type="number" value={pageMargins.left} min={MIN_PAGE_MARGIN_PX} max={MAX_PAGE_MARGIN_PX} onChange={(e) => setPageMargin("left", e.target.value)} /></label>
+        <label>Right <input type="number" value={pageMargins.right} min={MIN_PAGE_MARGIN_PX} max={MAX_PAGE_MARGIN_PX} onChange={(e) => setPageMargin("right", e.target.value)} /></label>
+        <label>Bottom <input type="number" value={pageMargins.bottom} min={MIN_PAGE_MARGIN_PX} max={MAX_PAGE_MARGIN_PX} onChange={(e) => setPageMargin("bottom", e.target.value)} /></label>
+        <button type="button" onMouseDown={noStealFocus} onClick={() => adjustSelectedParagraphIndent("paragraph", -12)}>Decrease Indent</button>
+        <button type="button" onMouseDown={noStealFocus} onClick={() => adjustSelectedParagraphIndent("paragraph", 12)}>Increase Indent</button>
+        <button type="button" onMouseDown={noStealFocus} onClick={() => adjustSelectedParagraphIndent("first-line", 12)}>First Line +</button>
+        <button type="button" onMouseDown={noStealFocus} onClick={() => setTabStops([])}>Clear Tabs</button>
+        <button type="button" onMouseDown={noStealFocus} onClick={resetRulerSettings}>Reset Ruler</button>
+        <span className="hint">Double-click the horizontal ruler to add/remove a tab stop. Press Tab in the document to use it.</span>
+      </div>
+      )}
+
+      <div className="dep-canvas">
+        <div className="dep-ruler-grid" style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top center", gridTemplateColumns: showRuler ? "32px max-content" : "0px max-content", gridTemplateRows: showRuler ? "28px max-content" : "0px max-content" }}>
+          {showRuler && <div className="dep-ruler-corner" />}
+          {showRuler && (
+          <div className="dep-horizontal-ruler" onDoubleClick={addTabStopFromRuler}>
+            <div className="dep-ruler-margin" style={{ left: 0, top: 0, width: pageMargins.left, height: 28 }} />
+            <div className="dep-ruler-margin" style={{ right: 0, top: 0, width: pageMargins.right, height: 28 }} />
+            {Array.from({ length: 17 }, (_, i) => i * 50).map((x, i) => (
+              <React.Fragment key={x}>
+                <span className="dep-ruler-tick" style={{ left: x, top: 0, width: 1, height: i % 2 === 0 ? 12 : 8 }} />
+                {i % 2 === 0 && <span className="dep-ruler-label" style={{ left: x + 2, top: 12 }}>{Math.round(x / 10)}</span>}
+              </React.Fragment>
+            ))}
+            <span className="dep-ruler-marker left" title="Left margin — drag to adjust" style={{ left: pageMargins.left }} onMouseDown={startMarginDrag("left")} />
+            <span className="dep-ruler-marker right" title="Right margin — drag to adjust" style={{ left: PAGE_WIDTH_PX - pageMargins.right }} onMouseDown={startMarginDrag("right")} />
+            {tabStops.map((stop) => (
+              <span key={stop} className="dep-ruler-marker tab" title={`Tab stop ${stop}px — drag to move, double-click to remove`} style={{ left: pageMargins.left + stop }} onMouseDown={startTabDrag(stop)} />
+            ))}
+            <span className="dep-ruler-marker indent-firstline" title="First-line indent — drag to adjust" style={{ left: pageMargins.left + indentMarkers.left + indentMarkers.firstLine }} onMouseDown={startIndentDrag("first-line")} />
+            <span className="dep-ruler-marker indent-left" title="Paragraph indent — drag to adjust" style={{ left: pageMargins.left + indentMarkers.left }} onMouseDown={startIndentDrag("paragraph")} />
+          </div>
+          )}
+          {showRuler && (
+          <div className="dep-vertical-ruler">
+            <div className="dep-ruler-margin" style={{ left: 0, top: 0, width: 32, height: pageMargins.top }} />
+            <div className="dep-ruler-margin" style={{ left: 0, bottom: 0, width: 32, height: pageMargins.bottom }} />
+            <span className="dep-ruler-marker-v top" title="Top margin — drag to adjust" style={{ top: pageMargins.top }} onMouseDown={startMarginDrag("top")} />
+            <span className="dep-ruler-marker-v bottom" title="Bottom margin — drag to adjust" style={{ top: PAGE_HEIGHT_PX - pageMargins.bottom }} onMouseDown={startMarginDrag("bottom")} />
+            {Array.from({ length: 23 }, (_, i) => i * 50).map((y, i) => (
+              <React.Fragment key={y}>
+                <span className="dep-ruler-tick" style={{ left: 20, top: y, width: i % 2 === 0 ? 10 : 6, height: 1 }} />
+                {i % 2 === 0 && <span className="dep-ruler-label" style={{ left: 2, top: y + 2 }}>{Math.round(y / 10)}</span>}
+              </React.Fragment>
+            ))}
+          </div>
+          )}
+          <div className="dep-page-area">
+            {rulerGuide?.x != null && <div className="dep-ruler-guide-v" style={{ left: rulerGuide.x }} />}
+            {rulerGuide?.y != null && <div className="dep-ruler-guide-h" style={{ top: rulerGuide.y }} />}
+            <div
+              ref={setEditorNode}
+              className="dep-page"
+              contentEditable
+              suppressContentEditableWarning
+              spellCheck={false}
+              lang={SPEECH_LOCALE[dep.language] || "gu-IN"}
+              style={{
+                fontFamily: FONT_BY_LANG[dep.language] || FONT_BY_LANG.gu, fontSize: fontSize + "pt", lineHeight: 1.5,
+                padding: `${pageMargins.top}px ${pageMargins.right}px ${pageMargins.bottom}px ${pageMargins.left}px`,
+              }}
+              onBeforeInput={onEditorBeforeInput}
+              onInput={onEditorInput}
+              onKeyDown={onEditorKeyDown}
+              onPaste={onEditorPaste}
+              onCompositionStart={onEditorCompositionStart}
+              onCompositionEnd={onEditorCompositionEnd}
+              onClick={onEditorClick}
+              onMouseDown={onEditorMouseDown}
+              data-testid="deposition-editor"
+            />
+          </div>
+        </div>
+      </div>
+
+      {cropTarget && (
+        <ImageCropModal img={cropTarget} onCancel={() => setCropTarget(null)} onApply={applyCrop} />
+      )}
+
+      <div className="dep-bottombar">
+        <div className="grp">
+          <button
+            style={{ background: "#4b5563", color: "#fff" }}
+            disabled={leavingForDetails}
+            onClick={saveAndOpenWitnessDetails}
+          >
+            {leavingForDetails ? "Saving..." : "← Back"}
+          </button>
+          <span>⏱ {elapsed}</span>
+          <span>Words: {wordCount}</span>
+          <span>Lang: {dep.language?.toUpperCase()}</span>
+          <span>Zoom:</span>
+          <input type="range" min={50} max={150} value={zoom} onChange={(e) => setZoom(+e.target.value)} />
+          <span>{zoom}%</span>
+          {renderSyncStatus()}
+          {renderVoiceEngineStatus()}
+        </div>
+        <div className="grp">
+          <button style={{ background: "#f59e0b" }} onClick={() => alert("Demand / OCR-relay workflow is planned for a later phase — this button is a placeholder for now.")}>Demand</button>
+          <button style={{ background: "#7c3aed", color: "#fff" }} onMouseDown={saveSelectionBeforeFocusLoss} onClick={doHostile}>Hostile</button>
+          <button style={{ background: "#2563eb", color: "#fff" }} onMouseDown={saveSelectionBeforeFocusLoss} onClick={doStartCross}>Start Cross</button>
+          <button style={{ background: "#16a34a", color: "#fff" }} onClick={doComplete}>Complete</button>
+          <button style={{ background: "#dc2626", color: "#fff" }} onClick={openAdjourn}>Adjourn</button>
+        </div>
+      </div>
+
+      {showAdjourn && (
+        <div className="modal-backdrop" onClick={() => setShowAdjourn(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <h3>Adjourn Deposition</h3>
+            <div className="form-grid">
+              <label>Reason to Adjourn</label>
+              <textarea
+                value={adjournReason}
+                onChange={(e) => setAdjournReason(e.target.value)}
+                rows={3}
+                style={{ width: "100%", resize: "vertical", fontFamily: "inherit", fontSize: 15, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 4 }}
+                data-testid="adjourn-reason-input"
+              />
+              <label>Next Date &amp; Time</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="date"
+                  value={adjournNextDate.split("T")[0] || ""}
+                  onChange={(e) => setAdjournNextDate(`${e.target.value}T${adjournNextDate.split("T")[1] || "10:00"}`)}
+                  style={{ flex: 1 }}
+                  data-testid="adjourn-date-input"
+                />
+                <input
+                  type="time"
+                  value={adjournNextDate.split("T")[1] || ""}
+                  onChange={(e) => setAdjournNextDate(`${adjournNextDate.split("T")[0] || new Date().toISOString().slice(0, 10)}T${e.target.value}`)}
+                  style={{ width: 120 }}
+                  data-testid="adjourn-time-input"
+                />
+              </div>
+              <label>Adjourned For</label>
+              <select value={adjournFor} onChange={(e) => setAdjournFor(e.target.value)}>
+                <option value="further_chief">Further Chief</option>
+                <option value="cross">Cross Examination</option>
+              </select>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowAdjourn(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={submitAdjourn}>Submit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pdfPreview && (
+        <div className="modal-backdrop" onClick={closePdfPreview}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "min(96vw, 1000px)", maxWidth: "1000px" }}>
+            <h3>Deposition PDF Preview</h3>
+            <iframe
+              title="Deposition PDF Preview"
+              src={pdfPreview.url}
+              style={{ width: "100%", height: "72vh", border: "1px solid var(--border)", borderRadius: 4, background: "#fff" }}
+            />
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={closePdfPreview}>Close</button>
+              <button className="btn btn-primary" onClick={downloadPdfPreview}>Download PDF</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showProofread && (
+        <div className="modal-backdrop" onClick={() => setShowProofread(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 820 }}>
+            <h3>Legal Proofread</h3>
+            <p className="hint">
+              Review each suggestion before applying. The original deposition text is changed only after you accept.
+            </p>
+            {proofreadSuggestions.length === 0 ? (
+              <p>No capitalization, punctuation, spelling, or legal-language suggestion found.</p>
+            ) : (
+              <div style={{ maxHeight: 420, overflow: "auto", display: "grid", gap: 10 }}>
+                {proofreadSuggestions.map((item) => (
+                  <div key={item.id} style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 10, background: "#fff" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <div>
+                        <strong>Original</strong>
+                        <p style={{ whiteSpace: "pre-wrap", margin: "6px 0 0" }}>{item.original.trim()}</p>
+                      </div>
+                      <div>
+                        <strong>Suggested</strong>
+                        <textarea
+                          value={item.suggested}
+                          onChange={(event) => updateProofreadSuggestion(item.id, event.target.value)}
+                          spellCheck={false}
+                          rows={Math.max(3, Math.min(8, item.suggested.split(/\r?\n/).length + 2))}
+                          style={{
+                            width: "100%",
+                            minHeight: 86,
+                            marginTop: 6,
+                            color: "#166534",
+                            border: "1px solid var(--border)",
+                            borderRadius: 4,
+                            padding: 8,
+                            font: "inherit",
+                            resize: "vertical",
+                            whiteSpace: "pre-wrap",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="modal-actions" style={{ marginTop: 10 }}>
+                      <button className="btn btn-secondary" onClick={() => rejectProofreadSuggestion(item.id)}>Reject</button>
+                      <button className="btn btn-primary" onClick={() => acceptProofreadSuggestions([item.id])}>Accept</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowProofread(false)}>Close</button>
+              {proofreadSuggestions.length > 0 && (
+                <button className="btn btn-primary" onClick={() => acceptProofreadSuggestions()}>Accept All</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSettings && (
+        <div className="modal-backdrop" onClick={() => setShowSettings(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <h3>Deposition Settings</h3>
+            <p className="hint" style={{ color: "#7c3aed" }}>
+              These settings apply <strong>only to your own Judge account</strong> — they are not shared
+              with, or applied to, any other Judge. More settings will be added here over time.
+            </p>
+            <div className="form-grid">
+              <label>Language</label>
+              <select value={settingsLang} onChange={(e) => switchSettingsLang(e.target.value)}>
+                {LANG_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <label>Custom "Hostile" paragraph (optional)</label>
+              <div>
+                <textarea
+                  value={settingsHostile}
+                  onChange={(e) => setSettingsHostile(e.target.value)}
+                  rows={4}
+                  placeholder="Leave blank to use the standard wording"
+                  style={{ width: "100%", resize: "vertical", fontFamily: "inherit", fontSize: 14, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 4 }}
+                />
+                <button type="button" className="btn btn-outline" style={{ padding: "4px 10px", marginTop: 4 }} onClick={() => setSettingsHostile("")}>
+                  Reset to Default
+                </button>
+              </div>
+              <label>Custom "Start Cross" line (optional)</label>
+              <div>
+                <textarea
+                  value={settingsStartCross}
+                  onChange={(e) => setSettingsStartCross(e.target.value)}
+                  rows={2}
+                  placeholder="Leave blank to use the standard wording"
+                  style={{ width: "100%", resize: "vertical", fontFamily: "inherit", fontSize: 14, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 4 }}
+                />
+                <button type="button" className="btn btn-outline" style={{ padding: "4px 10px", marginTop: 4 }} onClick={() => setSettingsStartCross("")}>
+                  Reset to Default
+                </button>
+              </div>
+            </div>
+            {settingsMsg && <p className="hint" style={{ color: "#16a34a" }}>{settingsMsg}</p>}
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowSettings(false)}>Close</button>
+              <button className="btn btn-primary" onClick={saveSettings}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
