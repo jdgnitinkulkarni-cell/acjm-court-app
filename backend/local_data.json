@@ -50775,7 +50775,7 @@
       "case_number": "TEST-GUJ-101/2026",
       "complainant_name": "Axis Bank Ltd.",
       "accused_name": "રમેશભાઈ મહેશભાઈ પટેલ",
-      "updated_at": "2026-10-09T12:07:18.347322+00:00",
+      "updated_at": "2026-10-12T05:19:50.073627+00:00",
       "id": "test-case-test-guj-101_2026",
       "created_at": "2026-09-14T11:09:45.193682+00:00"
     },
@@ -50784,7 +50784,7 @@
       "case_number": "TEST-GUJ-102/2026",
       "complainant_name": "Shriram Finance Ltd.",
       "accused_name": "સુરેશભાઈ મહેશભાઈ પટેલ",
-      "updated_at": "2026-10-09T12:07:18.347349+00:00",
+      "updated_at": "2026-10-12T05:19:50.073898+00:00",
       "id": "test-case-test-guj-102_2026",
       "created_at": "2026-09-14T11:09:45.193697+00:00"
     },
@@ -50793,7 +50793,7 @@
       "case_number": "TEST-HIN-201/2026",
       "complainant_name": "Bajaj Finance Ltd.",
       "accused_name": "मोहनलाल शर्मा",
-      "updated_at": "2026-10-09T12:07:18.347356+00:00",
+      "updated_at": "2026-10-12T05:19:50.073906+00:00",
       "id": "test-case-test-hin-201_2026",
       "created_at": "2026-09-14T11:09:45.193707+00:00"
     },
@@ -50802,7 +50802,7 @@
       "case_number": "TEST-HIN-202/2026",
       "complainant_name": "HDB Financial Services Ltd.",
       "accused_name": "सीमा वर्मा",
-      "updated_at": "2026-10-09T12:07:18.347361+00:00",
+      "updated_at": "2026-10-12T05:19:50.073912+00:00",
       "id": "test-case-test-hin-202_2026",
       "created_at": "2026-09-14T11:09:45.193715+00:00"
     },
@@ -50811,7 +50811,7 @@
       "case_number": "TEST-ENG-301/2026",
       "complainant_name": "Tata Capital Ltd.",
       "accused_name": "Ramesh Patel",
-      "updated_at": "2026-10-09T12:07:18.347366+00:00",
+      "updated_at": "2026-10-12T05:19:50.073917+00:00",
       "id": "test-case-test-eng-301_2026",
       "created_at": "2026-09-14T11:09:45.193723+00:00"
     },
@@ -50820,7 +50820,7 @@
       "case_number": "TEST-ENG-302/2026",
       "complainant_name": "Kotak Mahindra Bank Ltd.",
       "accused_name": "Meena Shah",
-      "updated_at": "2026-10-09T12:07:18.347372+00:00",
+      "updated_at": "2026-10-12T05:19:50.073923+00:00",
       "id": "test-case-test-eng-302_2026",
       "created_at": "2026-09-14T11:09:45.193731+00:00"
     },
@@ -50829,7 +50829,7 @@
       "case_number": "TEST-MULTI-401/2026",
       "complainant_name": "Demo Finance Ltd.",
       "accused_name": "Paresh Desai",
-      "updated_at": "2026-10-09T12:07:18.347377+00:00",
+      "updated_at": "2026-10-12T05:19:50.073928+00:00",
       "id": "test-case-test-multi-401_2026",
       "created_at": "2026-09-14T11:09:45.193740+00:00"
     },
@@ -50838,7 +50838,7 @@
       "case_number": "TEST-MULTI-402/2026",
       "complainant_name": "Demo Finance Ltd.",
       "accused_name": "Paresh Desai",
-      "updated_at": "2026-10-09T12:07:18.347383+00:00",
+      "updated_at": "2026-10-12T05:19:50.073933+00:00",
       "id": "test-case-test-multi-402_2026",
       "created_at": "2026-09-14T11:09:45.193748+00:00"
     }
@@ -56792,7 +56792,9 @@
           "31st ACJM, Ahmedabad City"
         ]
       },
-      "read_by": []
+      "read_by": [
+        "aadca30d-86f3-4b89-ad5c-2ddb73101f77"
+      ]
     }
   ],
   "sign_jobs": [
